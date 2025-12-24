@@ -1,215 +1,448 @@
-/* =========================================================
-   META MUSEUM — BETA (NO BACKEND)
-   Fix principali:
-   - BUG/OFFERTA: focus, invio con Enter, chip +%, saldo visibile, prefill intelligente
-   - Robustezza: normalizzazione dati (no NaN), history sempre coerente
-   - Effetto museo: 3D tilt + spotlight su cards (mouse follow)
-   ========================================================= */
+/* ============================================================
+   META MUSEUM — BETA
+   Frontend only • GitHub Pages friendly
+   - Dati fittizi in JSON
+   - Algoritmo valore trasparente e robusto (no NaN)
+   - localStorage per persistenza demo
+   - Effetti WOW: particles, parallax, tilt, reveal
+============================================================ */
 
-const CURRENCY_NAME = "MuseCredits";
-const CURRENCY_SYMBOL = "MΞ";
-const LS_KEY = "meta_museum_beta_v2";
+/* ----------------------------
+   0) Utility “sicure”
+---------------------------- */
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-const DEFAULT_DATA = {
-  user: {
-    username: null,
-    balance: 0,
-    followed: [],
-    likes: {},
-    activity: []
-  },
-  artworks: [
-    {
-      id: "mm-001",
-      title: "Busto Femminile // Index",
-      artist: "A. Neri",
-      img: "https://images.unsplash.com/photo-1541963463532-d68292c34b19?auto=format&fit=crop&w=1400&q=80",
-      desc: "Scultura classica re-immaginata come asset digitale. Ogni interazione sposta il prezzo come in una micro-borsa.",
-      base: 10,
-      likes: 124,
-      views: 6800,
-      offers: [14, 22, 18, 30],
-      history: [10, 11.2, 12.1, 11.9, 12.45, 12.68, 12.45]
-    },
-    {
-      id: "mm-002",
-      title: "Neon Corridor",
-      artist: "Luna Shard",
-      img: "https://images.unsplash.com/photo-1520975682031-a0a350c0ce4c?auto=format&fit=crop&w=1400&q=80",
-      desc: "Spazio architetturale sintetico: luce e profondità. Il valore cresce con l’interesse di mercato simulato.",
-      base: 10,
-      likes: 88,
-      views: 3900,
-      offers: [9, 12, 16],
-      history: [10, 10.6, 10.9, 11.1, 11.45, 11.62]
-    },
-    {
-      id: "mm-003",
-      title: "Algorithmic Bloom",
-      artist: "K. Yapa (demo)",
-      img: "https://images.unsplash.com/photo-1526318472351-c75fcf070305?auto=format&fit=crop&w=1400&q=80",
-      desc: "Pattern generativo ispirato a dati di mercato: una fioritura che reagisce al comportamento degli utenti.",
-      base: 10,
-      likes: 156,
-      views: 9100,
-      offers: [20, 26, 33, 17, 24],
-      history: [10, 11.0, 11.6, 12.4, 13.2, 13.9, 14.4]
-    },
-    {
-      id: "mm-004",
-      title: "Blue Signal (NFT-less)",
-      artist: "M. Riva",
-      img: "https://images.unsplash.com/photo-1550684376-efcbd6e3f031?auto=format&fit=crop&w=1400&q=80",
-      desc: "Arte digitale senza hype crypto: reputazione e domanda definiscono la traiettoria del valore.",
-      base: 10,
-      likes: 62,
-      views: 2500,
-      offers: [8, 10],
-      history: [10, 10.2, 10.3, 10.55, 10.7]
-    },
-    {
-      id: "mm-005",
-      title: "Quantum Portrait",
-      artist: "E. Satori",
-      img: "https://images.unsplash.com/photo-1520975958225-7f61a1b8b1b8?auto=format&fit=crop&w=1400&q=80",
-      desc: "Ritratto digitale: identità come variabile di mercato. Il valore segue le interazioni (simulazione).",
-      base: 10,
-      likes: 44,
-      views: 1200,
-      offers: [6, 7, 11],
-      history: [10, 10.15, 10.28, 10.44, 10.62]
-    },
-    {
-      id: "mm-006",
-      title: "Black Gallery / Void",
-      artist: "Studio Meta",
-      img: "https://images.unsplash.com/photo-1518998053901-5348d3961a04?auto=format&fit=crop&w=1400&q=80",
-      desc: "Ambiente museale immersivo: la sala stessa è un’opera. Trend e crescita sono guidati da domanda simulata.",
-      base: 10,
-      likes: 112,
-      views: 5400,
-      offers: [12, 18, 19],
-      history: [10, 10.9, 11.2, 11.75, 12.0, 12.12]
-    }
-  ]
+function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+function safeNum(n, fallback = 0) {
+  const x = Number(n);
+  return Number.isFinite(x) ? x : fallback;
+}
+function fmtInt(n) { return new Intl.NumberFormat("it-IT").format(safeNum(n, 0)); }
+function fmt2(n) { return safeNum(n, 0).toFixed(2); }
+
+/* Toast (messaggio veloce) */
+let toastTimer = null;
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("is-show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("is-show"), 1700);
+}
+
+/* Scroll morbido */
+function scrollToId(id) {
+  const el = document.querySelector(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ----------------------------
+   1) Config: valuta + coeff
+---------------------------- */
+const CURRENCY = { name: "MuseCredits", code: "MCR", symbol: "MCR" };
+
+// Coefficienti semplici e leggibili (puoi cambiarli facilmente)
+const COEFF = {
+  base: 10,
+  like: 0.20,
+  view: 0.05,
+  offer: 1.20,
 };
 
-let state = loadState();
-let currentArtworkId = null;
-let chart = null;
+/* Formula ufficiale usata nella demo:
+   valore_attuale = base + like*coeffLike + views*coeffView + offers*coeffOfferte
+*/
+function computeValue(art) {
+  const base = safeNum(art.baseValue, COEFF.base);
+  const likes = safeNum(art.likes, 0);
+  const views = safeNum(art.views, 0);
+  const offers = safeNum(art.offers, 0);
 
-function loadState(){
+  const v = base + (likes * COEFF.like) + (views * COEFF.view) + (offers * COEFF.offer);
+
+  // robustezza: clamp minimo, evita negativi o NaN
+  return clamp(safeNum(v, base), 0, 999999);
+}
+
+/* ----------------------------
+   2) Dataset fittizio
+   (immagini da URL pubblici)
+---------------------------- */
+const seedArtworks = [
+  {
+    id: "mm-001",
+    title: "Busto Femminile",
+    artist: "A. Rinaldi",
+    category: "concept",
+    desc: "Studio digitale su forma classica e valore percepito: l’interazione trasforma la quotazione.",
+    img: "https://images.unsplash.com/photo-1549899599-90debbbf6c51?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 12,
+    likes: 18,
+    views: 120,
+    offers: 2,
+    history: [12.1, 12.3, 12.6, 12.9, 13.2, 13.1, 13.4],
+  },
+  {
+    id: "mm-002",
+    title: "Neon Corridor",
+    artist: "K. Nova",
+    category: "3d",
+    desc: "Una galleria impossibile: prospettive e profondità. Perfetta per un museo digitale immersivo.",
+    img: "https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 10,
+    likes: 44,
+    views: 320,
+    offers: 4,
+    history: [10.2, 10.6, 10.9, 11.4, 11.9, 12.1, 12.6],
+  },
+  {
+    id: "mm-003",
+    title: "Aurora Protocol",
+    artist: "M. Ishikawa",
+    category: "ai",
+    desc: "Pattern generativi e micro-dettagli: un’opera che sembra viva, reattiva al pubblico.",
+    img: "https://images.unsplash.com/photo-1526498460520-4c246339dccb?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 11,
+    likes: 26,
+    views: 210,
+    offers: 1,
+    history: [11.0, 11.2, 11.4, 11.5, 11.7, 11.6, 11.8],
+  },
+  {
+    id: "mm-004",
+    title: "Blue Silence",
+    artist: "L. Verdi",
+    category: "photography",
+    desc: "Fotografia digitale: luce e grana. L’attenzione del pubblico guida il valore.",
+    img: "https://images.unsplash.com/photo-1520975958225-1c4a5f613a0a?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 9,
+    likes: 62,
+    views: 520,
+    offers: 6,
+    history: [9.1, 9.6, 10.0, 10.5, 11.1, 11.5, 12.2],
+  },
+  {
+    id: "mm-005",
+    title: "Signal Bloom",
+    artist: "S. Conti",
+    category: "ai",
+    desc: "Un fiore di segnali: estetica cyber e pulizia geometrica. Il trend cambia con la domanda.",
+    img: "https://images.unsplash.com/photo-1520975910891-98cc3e3f6ec9?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 10,
+    likes: 9,
+    views: 90,
+    offers: 0,
+    history: [10.0, 10.1, 10.2, 10.2, 10.3, 10.35, 10.4],
+  },
+  {
+    id: "mm-006",
+    title: "Museum Light",
+    artist: "E. Serra",
+    category: "photography",
+    desc: "Spazio bianco, opere sospese: una citazione del museo fisico traslata nel digitale.",
+    img: "https://images.unsplash.com/photo-1526142684086-7ebd69df27a5?auto=format&fit=crop&w=1400&q=80",
+    baseValue: 10,
+    likes: 21,
+    views: 160,
+    offers: 1,
+    history: [10.0, 10.2, 10.3, 10.5, 10.6, 10.7, 10.85],
+  },
+];
+
+/* ----------------------------
+   3) Stato + localStorage
+---------------------------- */
+const LS_KEYS = {
+  artworks: "mm_beta_artworks_v1",
+  user: "mm_beta_user_v1",
+  history: "mm_beta_history_v1",
+};
+
+function loadLS(key, fallback) {
   try{
-    const raw = localStorage.getItem(LS_KEY);
-    if(!raw) return normalizeState(structuredClone(DEFAULT_DATA));
-    const parsed = JSON.parse(raw);
-    return normalizeState({
-      user: { ...DEFAULT_DATA.user, ...(parsed.user || {}) },
-      artworks: Array.isArray(parsed.artworks) ? parsed.artworks : structuredClone(DEFAULT_DATA.artworks)
-    });
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw);
   }catch(e){
-    console.warn("Errore loadState, resetto:", e);
-    return normalizeState(structuredClone(DEFAULT_DATA));
+    return fallback;
+  }
+}
+function saveLS(key, value) {
+  try{
+    localStorage.setItem(key, JSON.stringify(value));
+  }catch(e){
+    // se localStorage non disponibile, la demo funziona comunque (solo senza persistenza)
   }
 }
 
-function saveState(){
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
+function makeDefaultUser(){
+  return {
+    username: null,
+    balance: 250,              // saldo demo iniziale
+    followed: [],              // ids opere “seguite” (non usato in UI, ma pronto)
+    likesTotal: 0,
+    offersTotal: 0,
+  };
 }
 
-function normalizeState(s){
-  s.user = s.user || structuredClone(DEFAULT_DATA.user);
-  s.user.followed = Array.isArray(s.user.followed) ? s.user.followed : [];
-  s.user.likes = s.user.likes && typeof s.user.likes === "object" ? s.user.likes : {};
-  s.user.activity = Array.isArray(s.user.activity) ? s.user.activity : [];
-  s.user.balance = Number.isFinite(Number(s.user.balance)) ? Number(s.user.balance) : 0;
-
-  s.artworks = Array.isArray(s.artworks) ? s.artworks : [];
-  s.artworks = s.artworks.map(normalizeArtwork);
-  return s;
+let artworks = loadLS(LS_KEYS.artworks, null);
+if (!Array.isArray(artworks) || artworks.length === 0) {
+  artworks = seedArtworks.map(a => normalizeArtwork(a));
+  saveLS(LS_KEYS.artworks, artworks);
+} else {
+  artworks = artworks.map(a => normalizeArtwork(a));
 }
+
+let user = loadLS(LS_KEYS.user, null);
+if (!user || typeof user !== "object") {
+  user = makeDefaultUser();
+  saveLS(LS_KEYS.user, user);
+} else {
+  user = { ...makeDefaultUser(), ...user };
+}
+
+let history = loadLS(LS_KEYS.history, []);
+if (!Array.isArray(history)) history = [];
 
 function normalizeArtwork(a){
   const art = { ...a };
-  art.base = safeNum(art.base, 10);
+  art.baseValue = safeNum(art.baseValue, COEFF.base);
   art.likes = safeNum(art.likes, 0);
   art.views = safeNum(art.views, 0);
-  art.offers = Array.isArray(art.offers) ? art.offers.map(v=>Math.max(0, Math.floor(safeNum(v,0)))) : [];
-  art.history = Array.isArray(art.history) ? art.history.map(v=>safeNum(v, art.base)) : [art.base];
-
-  // evita history vuota
-  if(art.history.length === 0) art.history = [art.base];
-
+  art.offers = safeNum(art.offers, 0);
+  art.history = Array.isArray(art.history) ? art.history.map(x => safeNum(x, art.baseValue)) : [];
+  if (art.history.length < 6) art.history = (art.history.length ? art.history : [art.baseValue]);
+  // salva anche valore corrente in modo consistente
+  art.value = computeValue(art);
   return art;
 }
 
-function safeNum(v, fallback=0){
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-/* ===== Algoritmo ===== */
-function computeOfferImpact(offers){
-  let sum = 0;
-  for(const v of offers){
-    sum += Math.sqrt(Math.max(0, v)) * 0.9;
-  }
-  return sum;
-}
-
-function computeValue(art){
-  const offerImpact = computeOfferImpact(art.offers);
-  const value = art.base + art.likes * 0.45 + art.views * 0.02 + offerImpact;
-  return Math.round(value * 100) / 100;
-}
-
-function computeTrend(art){
-  const h = art.history || [];
-  if(h.length < 2) return 0;
-  return Math.round((h[h.length - 1] - h[h.length - 2]) * 100) / 100;
-}
-
-function pushHistory(art){
-  const v = computeValue(art);
-  if(!Array.isArray(art.history)) art.history = [];
+function pushHistory(art, newValue){
+  const v = safeNum(newValue, computeValue(art));
   art.history.push(v);
-  if(art.history.length > 18) art.history = art.history.slice(-18);
+  // limita lunghezza (performance + grafico)
+  if (art.history.length > 32) art.history = art.history.slice(-32);
 }
 
-/* ===== Helpers UI ===== */
-const $ = (q, root=document) => root.querySelector(q);
-const $$ = (q, root=document) => Array.from(root.querySelectorAll(q));
+/* ----------------------------
+   4) Rendering UI
+---------------------------- */
+const grid = $("#artGrid");
+const marketList = $("#marketList");
 
-function fmt(n){ return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 }).format(n); }
-function money(n){ return `${fmt(n)} ${CURRENCY_SYMBOL}`; }
+let currentFilter = "all";
+let currentMarketSort = "popular";
+let searchQuery = "";
 
-function toast(msg){
-  const el = $("#toast");
-  el.textContent = msg;
-  el.hidden = false;
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => (el.hidden = true), 2100);
+function renderAll(){
+  $("#currencyLabel").textContent = `${CURRENCY.name} (${CURRENCY.code})`;
+
+  // metriche hero (mock credibili)
+  $("#metricArtworks").textContent = fmtInt(artworks.length);
+  const vol = artworks.reduce((s,a)=> s + safeNum(a.offers,0)*10, 0);
+  $("#metricVolume").textContent = fmtInt(vol);
+  $("#metricUsers").textContent = fmtInt(128 + (history.length % 90)); // mock
+
+  renderGallery();
+  renderMarket();
+  renderProfile();
 }
-function scrollToId(id){
-  document.getElementById(id)?.scrollIntoView({ behavior:"smooth", block:"start" });
+
+function matchesFilter(art){
+  if (currentFilter === "all") return true;
+  return art.category === currentFilter;
 }
-function nowTag(){
-  const d = new Date();
-  return d.toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+
+function matchesSearch(art){
+  if (!searchQuery) return true;
+  const q = searchQuery.toLowerCase();
+  return art.title.toLowerCase().includes(q) || art.artist.toLowerCase().includes(q);
 }
-function addActivity(type, detail){
-  if(!state.user.username) return;
-  state.user.activity.unshift({ at: nowTag(), type, detail });
-  state.user.activity = state.user.activity.slice(0, 20);
+
+function renderGallery(){
+  const items = artworks
+    .filter(matchesFilter)
+    .filter(matchesSearch);
+
+  grid.innerHTML = "";
+
+  if (items.length === 0) {
+    grid.innerHTML = `<div class="badge" style="grid-column:1/-1; justify-self:start;">
+      Nessun risultato per la ricerca.
+    </div>`;
+    return;
+  }
+
+  for (const art of items){
+    // rendering valore sempre calcolato “da formula”
+    art.value = computeValue(art);
+
+    const card = document.createElement("article");
+    card.className = "card reveal";
+    card.dataset.id = art.id;
+
+    card.innerHTML = `
+      <div class="card__media">
+        <img src="${art.img}" alt="${escapeHtml(art.title)}" loading="lazy" />
+        <div class="card__frame"></div>
+      </div>
+
+      <div class="card__body">
+        <h3 class="card__title">${escapeHtml(art.title)}</h3>
+        <div class="card__artist">${escapeHtml(art.artist)}</div>
+
+        <div class="card__meta">
+          <div class="kpi">
+            <div class="kpi__label">Valore</div>
+            <div class="kpi__value">${fmt2(art.value)} ${CURRENCY.code}</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi__label">Interazioni</div>
+            <div class="kpi__value">♥ ${fmtInt(art.likes)} • ◉ ${fmtInt(art.views)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card__foot">
+        ${sparklineSVG(art.history)}
+        <div class="card__actions">
+          <button class="iconbtn" data-action="view" title="Osserva">⟡</button>
+          <button class="iconbtn" data-action="like" title="Metti like">♥</button>
+          <button class="iconbtn" data-action="offer" title="Fai offerta">⇡</button>
+        </div>
+      </div>
+    `;
+
+    grid.appendChild(card);
+
+    // reveal animation
+    requestAnimationFrame(()=> card.classList.add("is-in"));
+  }
+
+  enableCardTilt();
 }
-function requireLogin(){
-  if(state.user.username) return true;
-  toast("Fai login per continuare (demo).");
-  scrollToId("profile");
-  return false;
+
+function renderMarket(){
+  const list = artworks.map(a => {
+    const value = computeValue(a);
+    const first = safeNum(a.history?.[0], value);
+    const last = safeNum(a.history?.[a.history.length-1], value);
+    const delta = last - first;
+
+    // popolarità: mix semplice (like + offers*2 + views/50)
+    const popularity = safeNum(a.likes,0) + safeNum(a.offers,0)*2 + safeNum(a.views,0)/50;
+
+    return { ...a, value, delta, popularity };
+  });
+
+  let sorted = list.slice();
+
+  if (currentMarketSort === "popular"){
+    sorted.sort((a,b)=> b.popularity - a.popularity);
+  } else if (currentMarketSort === "growth"){
+    sorted.sort((a,b)=> b.delta - a.delta);
+  } else if (currentMarketSort === "views"){
+    sorted.sort((a,b)=> safeNum(b.views,0) - safeNum(a.views,0));
+  }
+
+  marketList.innerHTML = "";
+
+  for (const art of sorted){
+    const up = art.delta >= 0;
+    const trendClass = up ? "trend trend--up" : "trend trend--down";
+    const arrow = up ? "↑" : "↓";
+
+    const row = document.createElement("div");
+    row.className = "row reveal";
+    row.dataset.id = art.id;
+
+    row.innerHTML = `
+      <div class="row__main">
+        <img class="thumb" src="${art.img}" alt="" loading="lazy" />
+        <div>
+          <div class="row__title">${escapeHtml(art.title)}</div>
+          <div class="row__sub">${escapeHtml(art.artist)} • ${escapeHtml(art.category.toUpperCase())}</div>
+        </div>
+      </div>
+
+      <div class="badge">${fmt2(art.value)} ${CURRENCY.code}</div>
+
+      <div class="${trendClass}">
+        <span>${arrow}</span>
+        <span>${fmt2(Math.abs(art.delta))}</span>
+      </div>
+
+      <button class="btn btn--ghost" data-open="1">
+        Apri
+        <span class="btn__glow"></span>
+      </button>
+    `;
+
+    marketList.appendChild(row);
+    requestAnimationFrame(()=> row.classList.add("is-in"));
+  }
 }
-function escapeHtml(str){
-  return String(str)
+
+function renderProfile(){
+  const name = user.username ? user.username : "Ospite";
+  $("#profileName").textContent = name;
+  $("#loginLabel").textContent = user.username ? name : "Login";
+
+  $("#profileBalance").textContent = `${fmt2(user.balance)} ${CURRENCY.code}`;
+  $("#profileLikes").textContent = fmtInt(user.likesTotal);
+  $("#profileOffers").textContent = fmtInt(user.offersTotal);
+
+  // storia (ultimi 12)
+  const box = $("#historyList");
+  box.innerHTML = "";
+  const last = history.slice(-12).reverse();
+
+  if (last.length === 0){
+    box.innerHTML = `<div class="badge">Nessuna interazione ancora. Apri un’opera e prova Like / Offerta.</div>`;
+    return;
+  }
+
+  for (const h of last){
+    const el = document.createElement("div");
+    el.className = "hitem";
+    el.innerHTML = `
+      <div>
+        <div><b>${escapeHtml(h.action)}</b> — ${escapeHtml(h.title)}</div>
+        <div class="hitem__meta">${escapeHtml(h.when)}</div>
+      </div>
+      <div class="badge">${escapeHtml(h.badge)}</div>
+    `;
+    box.appendChild(el);
+  }
+}
+
+/* Sparkline (leggerissimo, niente librerie) */
+function sparklineSVG(values){
+  const w = 120, h = 28, pad = 2;
+  const arr = (Array.isArray(values) ? values : []).map(v => safeNum(v, 0));
+  const min = Math.min(...arr);
+  const max = Math.max(...arr);
+  const range = Math.max(0.0001, max - min);
+
+  const pts = arr.map((v, i) => {
+    const x = pad + (i * (w - pad*2)) / Math.max(1, (arr.length - 1));
+    const y = pad + (1 - ((v - min) / range)) * (h - pad*2);
+    return [x, y];
+  });
+
+  const d = pts.map((p,i)=> (i===0 ? `M ${p[0].toFixed(1)} ${p[1].toFixed(1)}` : `L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`)).join(" ");
+  return `
+    <svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
+      <path d="${d}" fill="none" stroke="rgba(34,211,238,0.85)" stroke-width="2" />
+      <path d="${d}" fill="none" stroke="rgba(124,58,237,0.45)" stroke-width="5" opacity="0.25" />
+    </svg>
+  `;
+}
+
+function escapeHtml(s){
+  return String(s)
     .replaceAll("&","&amp;")
     .replaceAll("<","&lt;")
     .replaceAll(">","&gt;")
@@ -217,776 +450,490 @@ function escapeHtml(str){
     .replaceAll("'","&#039;");
 }
 
-/* ===== HERO STATS ===== */
-function renderHeroStats(){
-  $("#statArtworks").textContent = state.artworks.length;
-
-  let volume = 0;
-  let interactions = 0;
-  for(const a of state.artworks){
-    volume += computeValue(a);
-    interactions += a.likes + a.views + a.offers.length;
-  }
-  $("#statVolume").textContent = fmt(volume);
-  $("#statInteractions").textContent = fmt(interactions);
-
-  $("#heroLiveValue").textContent = money(computeValue(state.artworks[0]));
+/* ----------------------------
+   5) Interazioni: view/like/offer
+---------------------------- */
+function logHistory(action, art, badge){
+  const when = new Date().toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
+  history.push({ action, title: art.title, when, badge });
+  if (history.length > 80) history = history.slice(-80);
+  saveLS(LS_KEYS.history, history);
 }
 
-/* ===== GALLERY ===== */
-function getGalleryList(){
-  const q = ($("#searchInput").value || "").trim().toLowerCase();
-  const sort = $("#sortSelect").value;
-
-  let list = state.artworks.slice();
-  if(q){
-    list = list.filter(a =>
-      a.title.toLowerCase().includes(q) ||
-      a.artist.toLowerCase().includes(q)
-    );
-  }
-
-  if(sort === "value_desc"){
-    list.sort((a,b) => computeValue(b) - computeValue(a));
-  }else if(sort === "likes_desc"){
-    list.sort((a,b) => b.likes - a.likes);
-  }else if(sort === "views_desc"){
-    list.sort((a,b) => b.views - a.views);
-  }else{
-    list.sort((a,b) => {
-      const sa = computeValue(a) + computeTrend(a) * 4 + a.likes * 0.1;
-      const sb = computeValue(b) + computeTrend(b) * 4 + b.likes * 0.1;
-      return sb - sa;
-    });
-  }
-
-  return list;
+function updateArtwork(art){
+  art.value = computeValue(art);
+  pushHistory(art, art.value);
+  saveLS(LS_KEYS.artworks, artworks);
 }
 
-function renderGallery(){
-  const grid = $("#galleryGrid");
-  grid.innerHTML = "";
-
-  const list = getGalleryList();
-  if(list.length === 0){
-    grid.innerHTML = `<div class="muted" style="grid-column:1/-1;">Nessun risultato.</div>`;
-    return;
-  }
-
-  for(const art of list){
-    const value = computeValue(art);
-
-    const card = document.createElement("article");
-    card.className = "card art";
-    card.tabIndex = 0;
-    card.setAttribute("role", "button");
-    card.setAttribute("aria-label", `Apri opera ${art.title}`);
-
-    card.innerHTML = `
-      <div class="art__img" style="background-image:url('${art.img}')"></div>
-      <div class="art__body">
-        <div class="art__top">
-          <div>
-            <h3 class="art__title">${escapeHtml(art.title)}</h3>
-            <div class="art__artist">${escapeHtml(art.artist)}</div>
-          </div>
-          <div class="art__value">${money(value)}</div>
-        </div>
-
-        <div class="art__meta">
-          <span>❤ ${fmt(art.likes)}</span>
-          <span>👁 ${fmt(art.views)}</span>
-          <span>⟠ ${fmt(art.offers.length)} offerte</span>
-        </div>
-
-        <div class="art__actions">
-          <button class="btn btn--ghost" data-act="view" data-id="${art.id}" type="button">Osserva</button>
-          <button class="btn btn--ghost" data-act="like" data-id="${art.id}" type="button">Metti like</button>
-          <button class="btn btn--primary" data-act="offer" data-id="${art.id}" type="button">Fai offerta</button>
-        </div>
-      </div>
-    `;
-
-    card.addEventListener("click", (e)=>{
-      if(e.target?.matches?.("button")) return;
-      openArtwork(art.id, { countView:true });
-    });
-    card.addEventListener("keydown", (e)=>{
-      if(e.key === "Enter" || e.key === " "){
-        e.preventDefault();
-        openArtwork(art.id, { countView:true });
-      }
-    });
-
-    grid.appendChild(card);
-  }
-
-  // WOW: attiva tilt/parallax su nuove cards dopo ogni render
-  applyTiltToSelector(".art");
+function ensureLogged(){
+  if (user.username) return true;
+  openModal($("#loginModal"));
+  toast("Fai login demo per interagire.");
+  return false;
 }
 
-/* ===== MARKET ===== */
-let marketMode = "popular";
+/* ----------------------------
+   6) Modale opera + grafico
+---------------------------- */
+const artModal = $("#artModal");
+const loginModal = $("#loginModal");
+let currentArtId = null;
+let chart = null;
 
-function growthScore(a){
-  const h = a.history || [];
-  if(h.length < 2) return 0;
-  const first = h[0];
-  const last = h[h.length-1];
-  return (last-first) + computeTrend(a)*2;
-}
+function openArtModal(id){
+  const art = artworks.find(a => a.id === id);
+  if (!art) return;
 
-function getMarketList(){
-  const list = state.artworks.slice();
-  if(marketMode === "views"){
-    list.sort((a,b) => b.views - a.views);
-  }else if(marketMode === "gainers"){
-    list.sort((a,b)=> growthScore(b) - growthScore(a));
-  }else{
-    list.sort((a,b)=>{
-      const pa = a.likes*1.2 + a.views*0.08 + a.offers.length*6;
-      const pb = b.likes*1.2 + b.views*0.08 + b.offers.length*6;
-      return pb - pa;
-    });
-  }
-  return list.slice(0, 6);
-}
+  // ogni apertura = visualizzazione (incremento)
+  art.views = safeNum(art.views, 0) + 1;
+  updateArtwork(art);
+  logHistory("Osservata", art, `+1 view`);
+  renderProfile();
 
-function renderMarket(){
-  const grid = $("#marketGrid");
-  grid.innerHTML = "";
-
-  const list = getMarketList();
-  for(const art of list){
-    const v = computeValue(art);
-    const t = computeTrend(art);
-    const isUp = t >= 0;
-
-    const card = document.createElement("div");
-    card.className = "mcard";
-    card.innerHTML = `
-      <div class="mcard__top">
-        <div>
-          <h3 class="mcard__name">${escapeHtml(art.title)}</h3>
-          <div class="mcard__mini">${escapeHtml(art.artist)}</div>
-        </div>
-        <div class="mcard__price">${money(v)}</div>
-      </div>
-
-      <div class="trend ${isUp ? "up":"down"}">
-        <span>${isUp ? "▲" : "▼"}</span>
-        <span>${fmt(Math.abs(t))} ${CURRENCY_SYMBOL}</span>
-        <span class="muted">/ tick</span>
-      </div>
-
-      <canvas class="spark" width="360" height="76" data-spark="${art.id}" aria-hidden="true"></canvas>
-
-      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn--ghost" data-act="view" data-id="${art.id}" type="button">Dettagli</button>
-        <button class="btn btn--primary" data-act="offer" data-id="${art.id}" type="button">Offerta</button>
-      </div>
-    `;
-    grid.appendChild(card);
-  }
-
-  for(const a of list){
-    const c = $(`canvas[data-spark="${a.id}"]`);
-    if(c) drawSparkline(c, a.history || []);
-  }
-}
-
-/* ===== SPARKLINES ===== */
-function drawSparkline(canvas, values){
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0,0,w,h);
-
-  if(!values || values.length < 2){
-    ctx.globalAlpha = 0.7;
-    ctx.fillStyle = "rgba(255,255,255,.10)";
-    ctx.fillRect(0, h/2, w, 1);
-    ctx.globalAlpha = 1;
-    return;
-  }
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const pad = 10;
-
-  const xStep = (w - pad*2) / (values.length - 1);
-  const yMap = (v) => {
-    const t = (v - min) / (max - min || 1);
-    return (h - pad) - t * (h - pad*2);
-  };
-
-  ctx.fillStyle = "rgba(255,255,255,.03)";
-  ctx.fillRect(0,0,w,h);
-
-  ctx.beginPath();
-  values.forEach((v,i)=>{
-    const x = pad + i*xStep;
-    const y = yMap(v);
-    if(i===0) ctx.moveTo(x,y);
-    else ctx.lineTo(x,y);
-  });
-  ctx.lineTo(pad + (values.length-1)*xStep, h - pad);
-  ctx.lineTo(pad, h - pad);
-  ctx.closePath();
-  ctx.fillStyle = "rgba(34,211,238,.08)";
-  ctx.fill();
-
-  ctx.beginPath();
-  values.forEach((v,i)=>{
-    const x = pad + i*xStep;
-    const y = yMap(v);
-    if(i===0) ctx.moveTo(x,y);
-    else ctx.lineTo(x,y);
-  });
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "rgba(34,211,238,.55)";
-  ctx.stroke();
-
-  const lx = pad + (values.length-1)*xStep;
-  const ly = yMap(values[values.length-1]);
-  ctx.beginPath();
-  ctx.arc(lx, ly, 3.2, 0, Math.PI*2);
-  ctx.fillStyle = "rgba(124,58,237,.65)";
-  ctx.fill();
-}
-
-/* ===== MODAL + CHART ===== */
-function openArtwork(id, opts={ countView:false, focusOffer:false }){
-  const art = state.artworks.find(a=>a.id===id);
-  if(!art) return;
-
-  currentArtworkId = id;
-
-  if(opts.countView){
-    art.views += 1;
-    pushHistory(art);
-    saveState();
-  }
-
+  // riempi UI
+  currentArtId = id;
   $("#modalImg").src = art.img;
   $("#modalImg").alt = art.title;
-
   $("#modalTitle").textContent = art.title;
-  $("#modalArtist").textContent = art.artist;
+  $("#modalArtist").textContent = `di ${art.artist}`;
   $("#modalDesc").textContent = art.desc;
+  $("#modalCategory").textContent = art.category.toUpperCase();
 
-  $("#modalLikes").textContent = fmt(art.likes);
-  $("#modalViews").textContent = fmt(art.views);
-  $("#modalOffers").textContent = fmt(art.offers.length);
+  syncModalStats(art);
+  $("#modalFormula").textContent =
+    `valore = ${COEFF.base} + like*${COEFF.like} + views*${COEFF.view} + offers*${COEFF.offer}`;
 
-  // saldo visibile in modal
-  $("#modalBalance").textContent = state.user.username ? fmt(state.user.balance) : "—";
+  // grafico (Chart.js) - distruggi e ricrea per evitare bug
+  const ctx = $("#modalChart");
+  if (chart) { chart.destroy(); chart = null; }
 
-  const v = computeValue(art);
-  $("#modalValuePill").textContent = `Valore: ${money(v)}`;
-
-  const t = computeTrend(art);
-  const isUp = t >= 0;
-  $("#modalTrendPill").textContent = `${isUp ? "▲" : "▼"} Trend: ${fmt(Math.abs(t))} ${CURRENCY_SYMBOL}`;
-
-  $("#btnLike").textContent = state.user.likes[id] ? "Like aggiunto ✓" : "Metti like";
-  $("#btnFollow").textContent = state.user.followed.includes(id) ? "Segui ✓" : "Segui";
-
-  // prefill offerta intelligente (migliora UX + “wow”)
-  const offerInput = $("#offerInput");
-  const suggested = suggestOffer(art);
-  offerInput.placeholder = `Offerta (es. ${suggested} MΞ)`;
-  if(opts.focusOffer){
-    offerInput.value = suggested;
-  }else{
-    offerInput.value = "";
-  }
-
-  showModal();
-  renderChart(art);
-
-  if(opts.focusOffer){
-    // focus leggermente dopo per evitare race con rendering
-    setTimeout(()=> offerInput.focus(), 30);
-  }
-}
-
-function suggestOffer(art){
-  const last = art.offers.length ? Math.max(...art.offers) : Math.max(1, Math.floor(computeValue(art) * 0.25));
-  // suggerimento: +8% sopra l'ultima offerta (min +1)
-  const s = Math.max(1, Math.floor(last * 1.08));
-  return s;
-}
-
-function showModal(){
-  const modal = $("#artModal");
-  modal.hidden = false;
-  modal.setAttribute("aria-hidden","false");
-  document.body.style.overflow = "hidden";
-}
-
-function closeModal(){
-  const modal = $("#artModal");
-  modal.hidden = true;
-  modal.setAttribute("aria-hidden","true");
-  document.body.style.overflow = "";
-  currentArtworkId = null;
-}
-
-function renderChart(art){
-  const ctx = $("#valueChart");
-  const data = (art.history || []).slice(-14);
-  const labels = data.map((_,i)=> `${i+1}`);
-
-  if(chart){
-    chart.destroy();
-    chart = null;
-  }
-
+  const labels = art.history.map((_, i) => i + 1);
   chart = new Chart(ctx, {
     type: "line",
     data: {
       labels,
       datasets: [{
-        label: `Valore (${CURRENCY_SYMBOL})`,
-        data,
-        tension: 0.35,
-        fill: true,
-        borderColor: "rgba(34,211,238,.85)",
-        backgroundColor: "rgba(34,211,238,.10)",
-        pointRadius: 2.2,
-        pointHoverRadius: 4
+        label: `Valore (${CURRENCY.code})`,
+        data: art.history.map(v => safeNum(v, art.value)),
+        tension: 0.32,
+        borderWidth: 2,
+        pointRadius: 0,
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display:false },
-        tooltip: {
-          callbacks: { label: (c) => `${money(c.parsed.y)}` }
-        }
-      },
+      plugins: { legend: { display: false } },
       scales: {
-        x: { grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "rgba(255,255,255,.55)" } },
-        y: { grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "rgba(255,255,255,.55)" } }
+        x: { display: false },
+        y: {
+          ticks: { color: "rgba(240,244,255,0.65)" },
+          grid: { color: "rgba(140,160,255,0.10)" }
+        }
       }
     }
   });
+
+  // chiudi offerbox se aperto
+  $("#offerBox").hidden = true;
+
+  openModal(artModal);
+  renderGallery();
+  renderMarket();
 }
 
-/* ===== AZIONI MODAL ===== */
-function likeCurrent(){
-  const id = currentArtworkId;
-  if(!id) return;
-  if(!requireLogin()) return;
+function syncModalStats(art){
+  $("#modalValue").textContent = `${fmt2(art.value)} ${CURRENCY.code}`;
+  $("#modalLikes").textContent = fmtInt(art.likes);
+  $("#modalViews").textContent = fmtInt(art.views);
+  $("#modalOffers").textContent = fmtInt(art.offers);
+}
 
-  if(state.user.likes[id]){
-    toast("Hai già messo like (demo).");
+function openModal(modalEl){
+  modalEl.classList.add("is-open");
+  modalEl.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+}
+
+function closeModal(modalEl){
+  modalEl.classList.remove("is-open");
+  modalEl.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+}
+
+/* ----------------------------
+   7) Event listeners
+---------------------------- */
+
+// Nav scroll
+$$("[data-scroll]").forEach(btn => {
+  btn.addEventListener("click", () => scrollToId(btn.dataset.scroll));
+});
+
+// Button glow follows mouse
+$$(".btn").forEach(btn => {
+  btn.addEventListener("mousemove", (e) => {
+    const r = btn.getBoundingClientRect();
+    const mx = ((e.clientX - r.left) / r.width) * 100;
+    const my = ((e.clientY - r.top) / r.height) * 100;
+    btn.style.setProperty("--mx", `${mx}%`);
+    btn.style.setProperty("--my", `${my}%`);
+  });
+});
+
+// Gallery filter
+$$(".section--gallery .segmented__btn").forEach(b => {
+  b.addEventListener("click", () => {
+    $$(".section--gallery .segmented__btn").forEach(x => x.classList.remove("is-active"));
+    b.classList.add("is-active");
+    currentFilter = b.dataset.filter;
+    renderGallery();
+  });
+});
+
+// Search
+$("#searchInput").addEventListener("input", (e) => {
+  searchQuery = e.target.value.trim();
+  renderGallery();
+});
+
+// Market sort
+$$(".market .segmented__btn").forEach(b => {
+  b.addEventListener("click", () => {
+    $$(".market .segmented__btn").forEach(x => x.classList.remove("is-active"));
+    b.classList.add("is-active");
+    currentMarketSort = b.dataset.market;
+    renderMarket();
+  });
+});
+
+// Login button
+$("#btnLogin").addEventListener("click", () => openModal(loginModal));
+
+// Login confirm
+$("#loginConfirm").addEventListener("click", () => {
+  const v = $("#loginInput").value.trim();
+  if (v.length < 2){
+    toast("Inserisci almeno 2 caratteri.");
     return;
   }
-  const art = state.artworks.find(a=>a.id===id);
-  if(!art) return;
-
-  state.user.likes[id] = true;
-  art.likes += 1;
-
-  pushHistory(art);
-  addActivity("LIKE", `Hai messo like a "${art.title}"`);
-
-  saveState();
-  renderAll();
-  openArtwork(id, { countView:false, focusOffer:false }); // refresh modal
-  toast("Like registrato • valore aggiornato");
-}
-
-function followCurrent(){
-  const id = currentArtworkId;
-  if(!id) return;
-  if(!requireLogin()) return;
-
-  const art = state.artworks.find(a=>a.id===id);
-  if(!art) return;
-
-  const i = state.user.followed.indexOf(id);
-  if(i >= 0){
-    state.user.followed.splice(i,1);
-    addActivity("UNFOLLOW", `Hai smesso di seguire "${art.title}"`);
-    toast("Non segui più questa opera.");
-  }else{
-    state.user.followed.push(id);
-    addActivity("FOLLOW", `Stai seguendo "${art.title}"`);
-    toast("Ora segui questa opera.");
-  }
-
-  saveState();
+  user.username = v;
+  saveLS(LS_KEYS.user, user);
+  closeModal(loginModal);
+  toast(`Benvenuto, ${v}.`);
   renderProfile();
-  openArtwork(id, { countView:false, focusOffer:false });
-}
+});
 
-function offerCurrent(){
-  const id = currentArtworkId;
-  if(!id) return;
-  if(!requireLogin()) return;
+// Reset demo
+$("#btnReset").addEventListener("click", () => {
+  if (!confirm("Reset demo? Cancellerà dati salvati nel browser.")) return;
+  localStorage.removeItem(LS_KEYS.artworks);
+  localStorage.removeItem(LS_KEYS.user);
+  localStorage.removeItem(LS_KEYS.history);
+  location.reload();
+});
 
-  const art = state.artworks.find(a=>a.id===id);
-  if(!art) return;
+// Click su card / azioni
+grid.addEventListener("click", (e) => {
+  const card = e.target.closest(".card");
+  if (!card) return;
+  const id = card.dataset.id;
 
-  const raw = $("#offerInput").value;
-  const offer = Math.floor(Number(raw));
-
-  if(!Number.isFinite(offer) || offer <= 0){
-    toast("Inserisci un’offerta valida (numero > 0).");
-    $("#offerInput").focus();
+  const actBtn = e.target.closest("[data-action]");
+  if (!actBtn){
+    openArtModal(id);
     return;
   }
 
-  if(state.user.balance < offer){
-    toast("Saldo insufficiente (demo).");
-    $("#offerInput").focus();
+  const action = actBtn.dataset.action;
+
+  if (action === "view"){
+    openArtModal(id);
     return;
   }
 
-  state.user.balance -= offer;
-  art.offers.push(offer);
+  if (action === "like"){
+    if (!ensureLogged()) return;
+    const art = artworks.find(a => a.id === id);
+    if (!art) return;
 
-  pushHistory(art);
-  addActivity("OFFER", `Offerta ${offer} ${CURRENCY_SYMBOL} su "${art.title}"`);
+    art.likes = safeNum(art.likes, 0) + 1;
+    user.likesTotal = safeNum(user.likesTotal, 0) + 1;
 
-  saveState();
+    updateArtwork(art);
+    saveLS(LS_KEYS.user, user);
+
+    logHistory("Like", art, `+1 like`);
+    toast("Like registrato.");
+    renderAll();
+    return;
+  }
+
+  if (action === "offer"){
+    openArtModal(id);
+    $("#modalOfferBtn").click();
+  }
+});
+
+// Click su riga mercato
+marketList.addEventListener("click", (e) => {
+  const row = e.target.closest(".row");
+  if (!row) return;
+  const id = row.dataset.id;
+  openArtModal(id);
+});
+
+// Close modal by backdrop / close buttons
+$$(".modal").forEach(modal => {
+  modal.addEventListener("click", (e) => {
+    const close = e.target.closest("[data-close]");
+    if (close) closeModal(modal);
+  });
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape"){
+    if (artModal.classList.contains("is-open")) closeModal(artModal);
+    if (loginModal.classList.contains("is-open")) closeModal(loginModal);
+  }
+});
+
+// Modal actions
+$("#modalLikeBtn").addEventListener("click", () => {
+  if (!ensureLogged()) return;
+  const art = artworks.find(a => a.id === currentArtId);
+  if (!art) return;
+
+  art.likes = safeNum(art.likes, 0) + 1;
+  user.likesTotal = safeNum(user.likesTotal, 0) + 1;
+
+  updateArtwork(art);
+  saveLS(LS_KEYS.user, user);
+  logHistory("Like", art, `+1 like`);
+
+  toast("Like registrato.");
+  syncModalStats(art);
   renderAll();
-  openArtwork(id, { countView:false, focusOffer:false });
-  toast("Offerta registrata • valore aggiornato");
-}
+});
 
-async function shareCurrent(){
-  const id = currentArtworkId;
-  const art = state.artworks.find(a=>a.id===id);
-  if(!art) return;
+$("#modalOfferBtn").addEventListener("click", () => {
+  if (!ensureLogged()) return;
+  const art = artworks.find(a => a.id === currentArtId);
+  if (!art) return;
 
-  const text = `Meta Museum — ${art.title} (${money(computeValue(art))})`;
+  // mostra pannello offerta con range dinamico
+  const box = $("#offerBox");
+  box.hidden = false;
+
+  const range = $("#offerRange");
+  const suggestedMax = clamp(Math.round(art.value / 2), 12, 120);
+  range.min = 1;
+  range.max = suggestedMax;
+  range.value = clamp(10, 1, suggestedMax);
+
+  $("#offerValueLabel").textContent = `${range.value} ${CURRENCY.code}`;
+});
+
+$("#offerRange").addEventListener("input", (e) => {
+  $("#offerValueLabel").textContent = `${e.target.value} ${CURRENCY.code}`;
+});
+
+$("#offerCancel").addEventListener("click", () => {
+  $("#offerBox").hidden = true;
+});
+
+$("#offerConfirm").addEventListener("click", () => {
+  const art = artworks.find(a => a.id === currentArtId);
+  if (!art) return;
+
+  const amount = safeNum($("#offerRange").value, 0);
+  if (amount <= 0){
+    toast("Importo non valido.");
+    return;
+  }
+
+  // “realismo” in demo: saldo scalato.
+  if (safeNum(user.balance, 0) < amount){
+    toast("Saldo insufficiente (demo).");
+    return;
+  }
+
+  user.balance = safeNum(user.balance, 0) - amount;
+  user.offersTotal = safeNum(user.offersTotal, 0) + 1;
+
+  // in questa demo, un’offerta incrementa “offers” di 1 (domanda),
+  // e dà uno “shock” di trend perché il valore sale più nettamente.
+  art.offers = safeNum(art.offers, 0) + 1;
+
+  updateArtwork(art);
+  saveLS(LS_KEYS.user, user);
+  logHistory("Offerta simulata", art, `-${amount} ${CURRENCY.code}`);
+
+  $("#offerBox").hidden = true;
+  toast("Offerta registrata.");
+
+  syncModalStats(art);
+  renderAll();
+});
+
+$("#modalShareBtn").addEventListener("click", async () => {
+  const art = artworks.find(a => a.id === currentArtId);
+  if (!art) return;
+
+  const text = `Meta Museum — ${art.title} (${fmt2(art.value)} ${CURRENCY.code})`;
   try{
-    if(navigator.share){
-      await navigator.share({ title:"Meta Museum", text });
-    }else{
+    if (navigator.share){
+      await navigator.share({ title: "Meta Museum", text });
+      toast("Condiviso.");
+    } else {
       await navigator.clipboard.writeText(text);
       toast("Copiato negli appunti.");
     }
-  }catch{
-    toast("Condivisione annullata.");
+  }catch(e){
+    toast("Condivisione non disponibile.");
   }
-}
+});
 
-/* ===== LOGIN / PROFILE ===== */
-function renderNavUser(){
-  $("#navUserLabel").textContent = state.user.username ? state.user.username : "Login";
-}
+/* ----------------------------
+   8) WOW: Card tilt + parallax scroll
+---------------------------- */
 
-function renderProfile(){
-  $("#profileName").textContent = state.user.username ? state.user.username : "—";
-  $("#profileBalance").textContent = state.user.username ? fmt(state.user.balance) : "—";
-  $("#btnLogout").disabled = !state.user.username;
+// Tilt solo desktop (mouse)
+function enableCardTilt(){
+  const isCoarse = window.matchMedia("(pointer: coarse)").matches;
+  if (isCoarse) return;
 
-  const followed = $("#followedList");
-  followed.innerHTML = "";
-  if(!state.user.username){
-    followed.innerHTML = `<div class="muted small">Fai login per vedere profilo.</div>`;
-  }else if(state.user.followed.length === 0){
-    followed.innerHTML = `<div class="muted small">Nessuna opera seguita.</div>`;
-  }else{
-    for(const id of state.user.followed){
-      const art = state.artworks.find(a=>a.id===id);
-      if(!art) continue;
-      const row = document.createElement("div");
-      row.className = "mini-item";
-      row.innerHTML = `
-        <div>
-          <div style="font-weight:700;">${escapeHtml(art.title)}</div>
-          <div class="muted small">${money(computeValue(art))}</div>
-        </div>
-        <button class="btn btn--ghost" type="button" data-open="${art.id}">Apri</button>
-      `;
-      row.querySelector("button").addEventListener("click", ()=> openArtwork(art.id, { countView:true }));
-      followed.appendChild(row);
-    }
-  }
-
-  const activity = $("#activityList");
-  activity.innerHTML = "";
-  if(!state.user.username){
-    activity.innerHTML = `<div class="muted small">—</div>`;
-  }else if(state.user.activity.length === 0){
-    activity.innerHTML = `<div class="muted small">Nessuna attività.</div>`;
-  }else{
-    for(const a of state.user.activity){
-      const row = document.createElement("div");
-      row.className = "mini-item";
-      row.innerHTML = `
-        <div>
-          <div style="font-weight:700;">${escapeHtml(a.type)}</div>
-          <div class="muted small">${escapeHtml(a.detail)}</div>
-        </div>
-        <div class="muted small">${escapeHtml(a.at)}</div>
-      `;
-      activity.appendChild(row);
-    }
-  }
-}
-
-function login(username){
-  state.user.username = username;
-  if(!state.user.balance || state.user.balance <= 0) state.user.balance = 1500;
-  addActivity("LOGIN", `Accesso demo come ${username}`);
-  saveState();
-  renderAll();
-  toast(`Benvenuto ${username} • saldo ${fmt(state.user.balance)} ${CURRENCY_SYMBOL}`);
-}
-
-function logout(){
-  if(!state.user.username) return;
-  const old = state.user.username;
-  state.user.username = null;
-  saveState();
-  renderAll();
-  toast(`Logout: ${old}`);
-}
-
-/* ===== WOW: 3D TILT + spotlight follow ===== */
-function applyTiltToSelector(selector){
-  const els = $$(selector);
-  for(const el of els){
-    if(el.dataset.tiltBound === "1") continue;
-    el.dataset.tiltBound = "1";
-
-    const max = 8; // gradi
-    const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-
-    const onMove = (e)=>{
-      if(prefersReduced) return;
-      const r = el.getBoundingClientRect();
+  $$(".card").forEach(card => {
+    card.addEventListener("mousemove", (e) => {
+      const r = card.getBoundingClientRect();
       const px = (e.clientX - r.left) / r.width;
       const py = (e.clientY - r.top) / r.height;
 
-      const ry = (px - 0.5) * (max * 2);
-      const rx = -(py - 0.5) * (max * 2);
+      // rotazioni leggere (effetto museo)
+      const rotY = (px - 0.5) * 10;  // -5..+5
+      const rotX = (0.5 - py) * 8;   // -4..+4
 
-      el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
-      el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
-      el.style.setProperty("--px", `${(px*100).toFixed(1)}%`);
-      el.style.setProperty("--py", `${(py*100).toFixed(1)}%`);
-    };
+      card.style.setProperty("--mx", `${px*100}%`);
+      card.style.setProperty("--my", `${py*100}%`);
+      card.style.transform = `rotateX(${rotX}deg) rotateY(${rotY}deg) translateY(-1px)`;
+    });
 
-    const onLeave = ()=>{
-      el.style.setProperty("--rx", `0deg`);
-      el.style.setProperty("--ry", `0deg`);
-      el.style.setProperty("--px", `50%`);
-      el.style.setProperty("--py", `30%`);
-    };
+    card.addEventListener("mouseleave", () => {
+      card.style.transform = "";
+    });
+  });
+}
 
-    el.addEventListener("mousemove", onMove);
-    el.addEventListener("mouseleave", onLeave);
+// Parallax ambient “leggero” (mobile: scroll)
+let raf = null;
+window.addEventListener("scroll", () => {
+  if (raf) return;
+  raf = requestAnimationFrame(() => {
+    raf = null;
+    const y = window.scrollY || 0;
+    const gA = document.querySelector(".ambient__glow--a");
+    const gB = document.querySelector(".ambient__glow--b");
+    if (gA) gA.style.transform = `translate3d(0, ${y*0.06}px, 0)`;
+    if (gB) gB.style.transform = `translate3d(0, ${y*0.04}px, 0)`;
+  });
+}, { passive:true });
+
+/* ----------------------------
+   9) Reveal on scroll
+---------------------------- */
+const io = new IntersectionObserver((entries)=>{
+  for (const en of entries){
+    if (en.isIntersecting){
+      en.target.classList.add("is-in");
+      io.unobserve(en.target);
+    }
   }
+},{ threshold: 0.12 });
+
+function observeReveals(){
+  $$(".reveal").forEach(el => io.observe(el));
 }
 
-/* ===== EVENTI ===== */
-function bindEvents(){
-  $("#btnEnterMuseum").addEventListener("click", ()=> scrollToId("gallery"));
-  $("#btnScrollGallery").addEventListener("click", ()=> scrollToId("gallery"));
-  $("#btnScrollMarket").addEventListener("click", ()=> scrollToId("market"));
-  $("#btnOpenProfile").addEventListener("click", ()=> scrollToId("profile"));
-
-  const menu = $("#mobileMenu");
-  $("#btnMobileMenu").addEventListener("click", ()=>{ menu.hidden = !menu.hidden; });
-  $("#btnMobileProfile").addEventListener("click", ()=>{ menu.hidden = true; scrollToId("profile"); });
-
-  $("#searchInput").addEventListener("input", ()=> renderGallery());
-  $("#sortSelect").addEventListener("change", ()=> renderGallery());
-
-  $("#btnResetDemo").addEventListener("click", ()=>{
-    localStorage.removeItem(LS_KEY);
-    state = loadState();
-    renderAll();
-    toast("Demo resettata.");
-  });
-
-  // Delegation: gallery+market buttons
-  document.body.addEventListener("click", (e)=>{
-    const btn = e.target.closest("button[data-act]");
-    if(btn){
-      const id = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-act");
-      if(!id) return;
-
-      if(act === "view"){
-        openArtwork(id, { countView:true, focusOffer:false });
-      }else if(act === "like"){
-        if(!requireLogin()) return;
-        openArtwork(id, { countView:false, focusOffer:false });
-        likeCurrent();
-      }else if(act === "offer"){
-        if(!requireLogin()) return;
-        openArtwork(id, { countView:false, focusOffer:true });
-      }
-      return;
-    }
-
-    // offer chips (+%)
-    const chip = e.target.closest("button[data-offerchip]");
-    if(chip && !$("#artModal").hidden){
-      const pct = Number(chip.dataset.offerchip || "0");
-      const id = currentArtworkId;
-      const art = state.artworks.find(a=>a.id===id);
-      if(!art) return;
-
-      const base = art.offers.length ? Math.max(...art.offers) : suggestOffer(art);
-      const next = Math.max(1, Math.floor(base * (1 + pct/100)));
-      $("#offerInput").value = next;
-      $("#offerInput").focus();
-      toast(`Suggerito: ${next} ${CURRENCY_SYMBOL}`);
-      return;
-    }
-  });
-
-  // Market tabs
-  $$(".chip").forEach(ch=>{
-    ch.addEventListener("click", ()=>{
-      $$(".chip").forEach(x=>x.classList.remove("is-active"));
-      ch.classList.add("is-active");
-      marketMode = ch.dataset.market;
-      renderMarket();
-    });
-  });
-
-  // Modal close
-  $("#artModal").addEventListener("click", (e)=>{
-    if(e.target?.dataset?.close) closeModal();
-  });
-  document.addEventListener("keydown", (e)=>{
-    if(e.key === "Escape" && !$("#artModal").hidden) closeModal();
-  });
-
-  // Modal actions
-  $("#btnLike").addEventListener("click", likeCurrent);
-  $("#btnFollow").addEventListener("click", followCurrent);
-  $("#btnOffer").addEventListener("click", offerCurrent);
-  $("#btnShare").addEventListener("click", shareCurrent);
-
-  // BUGFIX OFFERTA: ENTER invia offerta
-  $("#offerInput").addEventListener("keydown", (e)=>{
-    if(e.key === "Enter"){
-      e.preventDefault();
-      offerCurrent();
-    }
-  });
-
-  // Login
-  $("#loginForm").addEventListener("submit", (e)=>{
-    e.preventDefault();
-    const raw = ($("#usernameInput").value || "").trim();
-    const username = raw.replace(/\s+/g, "").slice(0,18);
-    if(username.length < 2){
-      toast("Username troppo corto.");
-      return;
-    }
-    login(username);
-  });
-  $("#btnLogout").addEventListener("click", logout);
-}
-
-/* ===== GSAP WOW ===== */
-function initGSAP(){
-  if(!window.gsap) return;
-  gsap.registerPlugin(ScrollTrigger);
-
-  gsap.to(".reveal", {
-    opacity: 1,
-    y: 0,
-    duration: 0.8,
-    ease: "power2.out",
-    stagger: 0.06,
-    delay: 0.05
-  });
-
-  gsap.to(".orb--1", { x: 28, y: 16, duration: 6, repeat:-1, yoyo:true, ease:"sine.inOut" });
-  gsap.to(".orb--2", { x: -22, y: 18, duration: 7, repeat:-1, yoyo:true, ease:"sine.inOut" });
-  gsap.to(".orb--3", { x: 18, y: -22, duration: 8, repeat:-1, yoyo:true, ease:"sine.inOut" });
-
-  gsap.utils.toArray(".section").forEach((sec)=>{
-    gsap.fromTo(sec, { filter:"brightness(0.92)" }, {
-      filter:"brightness(1)",
-      scrollTrigger: { trigger: sec, start:"top 80%", end:"top 20%", scrub: true }
-    });
-  });
-
-  const showcase = $("#heroShowcase");
-  window.addEventListener("mousemove", (e)=>{
-    const r = showcase.getBoundingClientRect();
-    const cx = r.left + r.width/2;
-    const cy = r.top + r.height/2;
-    const dx = (e.clientX - cx) / r.width;
-    const dy = (e.clientY - cy) / r.height;
-    gsap.to(showcase, {
-      rotateY: dx*6, rotateX: -dy*6,
-      transformPerspective: 800,
-      duration: 0.5, ease:"power2.out"
-    });
-  }, { passive:true });
-}
-
-/* ===== HERO CANVAS ===== */
+/* ----------------------------
+   10) Particles hero (canvas)
+   Leggero e fluido
+---------------------------- */
 function initHeroCanvas(){
-  const canvas = $("#heroCanvas");
-  const ctx = canvas.getContext("2d");
-  let w, h, dpr;
-  let particles = [];
+  const c = $("#heroCanvas");
+  const ctx = c.getContext("2d");
+  let w = 0, h = 0, dpr = Math.min(2, window.devicePixelRatio || 1);
+
+  const particles = [];
+  const COUNT = 70;
 
   function resize(){
-    dpr = Math.max(1, window.devicePixelRatio || 1);
-    w = canvas.clientWidth;
-    h = canvas.clientHeight;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-
-    particles = Array.from({length: 70}, ()=>({
-      x: Math.random()*w,
-      y: Math.random()*h,
-      r: 0.8 + Math.random()*2.2,
-      vx: (-0.18 + Math.random()*0.36),
-      vy: (-0.12 + Math.random()*0.24),
-      a: 0.25 + Math.random()*0.45
-    }));
+    w = c.clientWidth; h = c.clientHeight;
+    c.width = Math.floor(w * dpr);
+    c.height = Math.floor(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function tick(){
+  function make(){
+    particles.length = 0;
+    for (let i=0; i<COUNT; i++){
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random()*2-1) * 0.22,
+        vy: (Math.random()*2-1) * 0.18,
+        r: 1 + Math.random()*2.2,
+        t: Math.random()*Math.PI*2
+      });
+    }
+  }
+
+  let mx = w/2, my = h/2;
+  window.addEventListener("mousemove", (e)=>{
+    mx = e.clientX;
+    my = e.clientY;
+  }, { passive:true });
+
+  function draw(){
+    // background gradient “cinematografico”
     ctx.clearRect(0,0,w,h);
 
     const g = ctx.createLinearGradient(0,0,w,h);
-    g.addColorStop(0, "rgba(124,58,237,.14)");
-    g.addColorStop(0.5, "rgba(34,211,238,.10)");
-    g.addColorStop(1, "rgba(59,130,246,.10)");
+    g.addColorStop(0, "rgba(124,58,237,0.12)");
+    g.addColorStop(0.45, "rgba(34,211,238,0.10)");
+    g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
     ctx.fillRect(0,0,w,h);
 
-    for(const p of particles){
-      p.x += p.vx; p.y += p.vy;
-      if(p.x < -30) p.x = w+30;
-      if(p.x > w+30) p.x = -30;
-      if(p.y < -30) p.y = h+30;
-      if(p.y > h+30) p.y = -30;
+    // particles
+    for (const p of particles){
+      p.t += 0.01;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // leggera attrazione verso mouse per “parallax”
+      const dx = (mx - p.x) * 0.00025;
+      const dy = (my - p.y) * 0.00025;
+      p.x += dx; p.y += dy;
+
+      if (p.x < -20) p.x = w+20;
+      if (p.x > w+20) p.x = -20;
+      if (p.y < -20) p.y = h+20;
+      if (p.y > h+20) p.y = -20;
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
-      ctx.fillStyle = `rgba(255,255,255,${p.a})`;
+      ctx.fillStyle = "rgba(240,244,255,0.12)";
       ctx.fill();
     }
 
-    for(let i=0;i<particles.length;i++){
-      for(let j=i+1;j<particles.length;j++){
+    // lines (connessioni leggere)
+    for (let i=0; i<particles.length; i++){
+      for (let j=i+1; j<particles.length; j++){
         const a = particles[i], b = particles[j];
         const dx = a.x-b.x, dy = a.y-b.y;
-        const d = Math.sqrt(dx*dx + dy*dy);
-        if(d < 120){
-          const alpha = (1 - d/120) * 0.12;
+        const dist = Math.hypot(dx,dy);
+        if (dist < 120){
+          const alpha = (1 - dist/120) * 0.08;
           ctx.strokeStyle = `rgba(34,211,238,${alpha})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -997,41 +944,28 @@ function initHeroCanvas(){
       }
     }
 
-    requestAnimationFrame(tick);
+    requestAnimationFrame(draw);
   }
 
-  window.addEventListener("resize", resize);
   resize();
-  tick();
-}
-
-function initHeroSpark(){
-  const c = $("#heroSpark");
-  function draw(){
-    const values = [];
-    let v = 10;
-    for(let i=0;i<22;i++){
-      v += (Math.random()-0.45)*0.8;
-      values.push(v);
-    }
-    drawSparkline(c, values);
-  }
+  make();
   draw();
-  setInterval(draw, 2200);
+  window.addEventListener("resize", () => {
+    resize();
+    make();
+  });
 }
 
-/* ===== MAIN RENDER ===== */
-function renderAll(){
-  renderNavUser();
-  renderHeroStats();
-  renderGallery();
-  renderMarket();
-  renderProfile();
-}
+/* ----------------------------
+   11) Start
+---------------------------- */
+function boot(){
+  initHeroCanvas();
 
-/* ===== INIT ===== */
-bindEvents();
-renderAll();
-initHeroCanvas();
-initHeroSpark();
-initGSAP();
+  // inizializza reveal observer
+  observeReveals();
+
+  // inizializza UI
+  renderAll();
+}
+boot();
