@@ -3,464 +3,482 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Meta Museum — Beta</title>
-  <meta name="description" content="Museo digitale interattivo dove ogni interazione genera valore (demo simulata)." />
-
+  <title>Meta Museum — BETA</title>
+  <meta name="description" content="Museo digitale interattivo dove ogni interazione genera valore (simulato)." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Font moderno e leggibile -->
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="styles.css" />
+  <!-- Chart.js solo per il grafico grande in modale (CDN, compatibile GitHub Pages) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <link rel="stylesheet" href="./style.css" />
 </head>
 
 <body>
-  <div class="bg-noise" aria-hidden="true"></div>
-  <div class="bg-aurora" aria-hidden="true"></div>
+  <!-- Ambient layers (parallax) -->
+  <div class="ambient">
+    <div class="ambient__grid"></div>
+    <div class="ambient__glow ambient__glow--a"></div>
+    <div class="ambient__glow ambient__glow--b"></div>
+    <div class="ambient__noise"></div>
+  </div>
 
-  <!-- NAV -->
-  <header class="nav">
-    <div class="nav__inner">
-      <a class="brand" href="#top" aria-label="Meta Museum Home">
-        <span class="brand__mark">MM</span>
-        <span class="brand__text">Meta Museum</span>
-        <span class="pill pill--live">BETA</span>
-      </a>
-
-      <nav class="nav__links" aria-label="Navigazione">
-        <a href="#gallery">Galleria</a>
-        <a href="#market">Mercato</a>
-        <a href="#how">Come funziona</a>
-        <a href="#roadmap">Roadmap</a>
-        <a href="#investors">Investitori</a>
-      </nav>
-
-      <div class="nav__actions">
-        <button id="btnOpenProfile" class="btn btn--ghost" type="button">
-          <span class="dot" aria-hidden="true"></span>
-          <span id="navUserLabel">Login</span>
-        </button>
-        <button id="btnEnterMuseum" class="btn btn--primary" type="button">Entra</button>
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <div class="logo">MM</div>
+      <div class="brand">
+        <div class="brand__name">Meta Museum</div>
+        <div class="brand__tag">BETA • mercato simulato</div>
       </div>
-
-      <button id="btnMobileMenu" class="nav__burger" type="button" aria-label="Apri menu">
-        <span></span><span></span><span></span>
-      </button>
     </div>
 
-    <div id="mobileMenu" class="mobile" hidden>
-      <a href="#gallery">Galleria</a>
-      <a href="#market">Mercato</a>
-      <a href="#how">Come funziona</a>
-      <a href="#roadmap">Roadmap</a>
-      <a href="#investors">Investitori</a>
-      <button id="btnMobileProfile" class="btn btn--ghost" type="button">Login / Profilo</button>
+    <nav class="topbar__nav">
+      <button class="navlink" data-scroll="#gallery">Galleria</button>
+      <button class="navlink" data-scroll="#market">Mercato</button>
+      <button class="navlink" data-scroll="#how">Come funziona</button>
+      <button class="navlink" data-scroll="#roadmap">Roadmap</button>
+      <button class="navlink" data-scroll="#profile">Profilo</button>
+    </nav>
+
+    <div class="topbar__actions">
+      <div class="chip" id="chipCurrency" title="Valuta virtuale della demo">
+        <span class="chip__dot"></span>
+        <span id="currencyLabel">MuseCredits (MCR)</span>
+      </div>
+
+      <button class="btn btn--ghost" id="btnLogin">
+        <span class="btn__icon">⎆</span>
+        <span id="loginLabel">Login</span>
+      </button>
     </div>
   </header>
 
   <!-- HERO -->
-  <main id="top">
-    <section class="hero section">
+  <main>
+    <section class="hero" id="home">
       <canvas id="heroCanvas" class="hero__canvas" aria-hidden="true"></canvas>
 
       <div class="hero__inner">
-        <div class="hero__left">
-          <p class="kicker reveal">Museo del futuro • Borsa d’arte digitale (simulata)</p>
-
-          <h1 class="title reveal">
-            Meta Museum
-            <span class="title__glow" aria-hidden="true"></span>
-          </h1>
-
-          <p class="subtitle reveal">
-            Museo digitale interattivo dove <b>ogni interazione genera valore</b>.
-            <span class="muted">Nessun denaro reale: tutto in <b>MuseCredits (MΞ)</b>.</span>
-          </p>
-
-          <div class="hero__cta reveal">
-            <button id="btnScrollGallery" class="btn btn--primary" type="button">Entra nel museo</button>
-            <button id="btnScrollMarket" class="btn btn--ghost" type="button">Esplora il mercato</button>
-          </div>
-
-          <div class="hero__stats reveal" role="list">
-            <div class="stat" role="listitem">
-              <div class="stat__v" id="statArtworks">—</div>
-              <div class="stat__k">Opere in mostra</div>
-            </div>
-            <div class="stat" role="listitem">
-              <div class="stat__v" id="statVolume">—</div>
-              <div class="stat__k">Volume simulato (MΞ)</div>
-            </div>
-            <div class="stat" role="listitem">
-              <div class="stat__v" id="statInteractions">—</div>
-              <div class="stat__k">Interazioni totali</div>
-            </div>
-          </div>
+        <div class="hero__kicker">
+          <span class="pulse-dot"></span>
+          Museo digitale • Interazioni → Valore (simulato)
         </div>
 
-        <div class="hero__right reveal" aria-hidden="true">
-          <div class="showcase" id="heroShowcase">
-            <div class="showcase__frame">
-              <div class="showcase__img"></div>
-              <div class="showcase__hud">
-                <div class="showcase__row">
-                  <span class="pill">Live Index</span>
-                  <span class="pill pill--neon">MuseCredits (MΞ)</span>
-                </div>
-                <div class="showcase__price">
-                  <span class="muted">Artwork Value</span>
-                  <span class="big" id="heroLiveValue">12.450 MΞ</span>
-                </div>
-                <div class="showcase__spark">
-                  <canvas id="heroSpark" width="280" height="80" aria-hidden="true"></canvas>
-                </div>
-                <div class="showcase__mini muted">
-                  Demo educativa • Nessun pagamento reale
-                </div>
-              </div>
-            </div>
+        <h1 class="hero__title">
+          Meta Museum
+        </h1>
 
-            <div class="orb orb--1"></div>
-            <div class="orb orb--2"></div>
-            <div class="orb orb--3"></div>
+        <p class="hero__subtitle">
+          Museo digitale interattivo dove <b>ogni interazione genera valore</b>.
+          Un’esperienza immersiva: galleria + mercato dinamico dell’arte — senza denaro reale.
+        </p>
+
+        <div class="hero__cta">
+          <button class="btn btn--primary" data-scroll="#gallery">
+            Entra nel museo
+            <span class="btn__glow"></span>
+          </button>
+
+          <button class="btn btn--secondary" data-scroll="#market">
+            Esplora il mercato
+            <span class="btn__glow"></span>
+          </button>
+        </div>
+
+        <div class="hero__metrics">
+          <div class="metric">
+            <div class="metric__value" id="metricArtworks">—</div>
+            <div class="metric__label">opere in esposizione</div>
+          </div>
+          <div class="metric">
+            <div class="metric__value" id="metricVolume">—</div>
+            <div class="metric__label">volume simulato (MCR)</div>
+          </div>
+          <div class="metric">
+            <div class="metric__value" id="metricUsers">—</div>
+            <div class="metric__label">utenti demo (mock)</div>
           </div>
         </div>
       </div>
 
-      <div class="hero__footer">
-        <div class="notice">
-          <span class="notice__badge">SIMULAZIONE</span>
-          <span class="notice__text">
-            Questa beta è una demo: mercato e crediti sono fittizi, pensati per mostrare il potenziale del progetto.
-          </span>
+      <div class="hero__scrollhint">
+        <div class="scrollhint__mouse"></div>
+        <div class="scrollhint__text">Scroll per entrare nel museo</div>
+      </div>
+    </section>
+
+    <!-- GALLERIA -->
+    <section class="section section--gallery" id="gallery">
+      <div class="section__head">
+        <h2 class="section__title">Galleria opere</h2>
+        <p class="section__desc">
+          Le opere sembrano “appese” a pareti virtuali. Muovi il mouse (desktop) per la profondità.
+          Su mobile l’effetto è legato allo scroll.
+        </p>
+      </div>
+
+      <!-- “Corridoio” 3D -->
+      <div class="corridor">
+        <div class="corridor__wall corridor__wall--left"></div>
+        <div class="corridor__wall corridor__wall--right"></div>
+        <div class="corridor__floor"></div>
+
+        <div class="gallery">
+          <div class="gallery__filters">
+            <div class="segmented" role="tablist" aria-label="Filtri galleria">
+              <button class="segmented__btn is-active" data-filter="all">Tutte</button>
+              <button class="segmented__btn" data-filter="photography">Fotografia</button>
+              <button class="segmented__btn" data-filter="3d">3D</button>
+              <button class="segmented__btn" data-filter="ai">AI Art</button>
+              <button class="segmented__btn" data-filter="concept">Concettuale</button>
+            </div>
+
+            <div class="search">
+              <input id="searchInput" type="search" placeholder="Cerca opera o artista..." autocomplete="off" />
+              <div class="search__icon">⌕</div>
+            </div>
+          </div>
+
+          <div class="grid" id="artGrid" aria-live="polite"></div>
         </div>
       </div>
     </section>
 
-    <!-- GALLERY -->
-    <section id="gallery" class="section museum-hall">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Galleria opere</h2>
-          <p class="muted reveal">Osserva, metti like, fai un’offerta simulata. Il valore si aggiorna in tempo reale.</p>
+    <!-- MERCATO -->
+    <section class="section" id="market">
+      <div class="section__head">
+        <h2 class="section__title">Mercato simulato</h2>
+        <p class="section__desc">
+          Un’idea di “borsa dell’arte” con ordinamenti e indicatori (sparklines, trend, crescita).
+          Tutto basato su dati simulati nel frontend.
+        </p>
+      </div>
+
+      <div class="market">
+        <div class="market__toolbar">
+          <div class="segmented" role="tablist" aria-label="Ordinamenti mercato">
+            <button class="segmented__btn is-active" data-market="popular">Più popolari</button>
+            <button class="segmented__btn" data-market="growth">Più in crescita</button>
+            <button class="segmented__btn" data-market="views">Più visualizzate</button>
+          </div>
+
+          <div class="market__legend">
+            <span class="legend__item"><i class="dot dot--up"></i> trend positivo</span>
+            <span class="legend__item"><i class="dot dot--down"></i> trend negativo</span>
+          </div>
         </div>
 
-        <div class="toolbar reveal">
-          <div class="search">
-            <input id="searchInput" type="search" placeholder="Cerca titolo o artista…" autocomplete="off" />
-          </div>
-          <div class="filters">
-            <select id="sortSelect" aria-label="Ordina galleria">
-              <option value="trending">In tendenza</option>
-              <option value="value_desc">Valore (alto → basso)</option>
-              <option value="likes_desc">Like</option>
-              <option value="views_desc">Visualizzazioni</option>
-            </select>
-            <button id="btnResetDemo" class="btn btn--ghost" type="button" title="Reset demo (localStorage)">
-              Reset demo
-            </button>
-          </div>
-        </div>
-
-        <div id="galleryGrid" class="grid grid--museum" aria-live="polite"></div>
+        <div class="market__list" id="marketList"></div>
       </div>
     </section>
 
-    <!-- MARKET -->
-    <section id="market" class="section section--alt">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Mercato simulato</h2>
-          <p class="muted reveal">Classifiche live: popolari, in crescita, più viste. Indicatori e sparklines credibili.</p>
-        </div>
-
-        <div class="market__tabs reveal">
-          <button class="chip is-active" data-market="popular" type="button">Più popolari</button>
-          <button class="chip" data-market="gainers" type="button">Più in crescita</button>
-          <button class="chip" data-market="views" type="button">Più visualizzate</button>
-        </div>
-
-        <div id="marketGrid" class="market" aria-live="polite"></div>
+    <!-- COME FUNZIONA -->
+    <section class="section" id="how">
+      <div class="section__head">
+        <h2 class="section__title">Come funziona</h2>
+        <p class="section__desc">
+          Algoritmo trasparente: like, visualizzazioni e offerte influenzano il valore.
+          Nessun denaro reale: solo simulazione educativa.
+        </p>
       </div>
-    </section>
 
-    <!-- HOW IT WORKS -->
-    <section id="how" class="section">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Come funziona</h2>
-          <p class="muted reveal">
-            Il valore è dinamico e trasparente: like, visualizzazioni e offerte simulano domanda e interesse di mercato.
-          </p>
+      <div class="how">
+        <div class="how__card reveal">
+          <div class="how__icon">♥</div>
+          <h3>Like → incremento leggero</h3>
+          <p>Ogni like aumenta un po’ il valore: segnala gradimento e qualità percepita.</p>
         </div>
 
-        <div class="how reveal">
-          <div class="card card--glass">
-            <h3 class="h3">Algoritmo trasparente</h3>
-            <p class="muted">
-              Ogni opera parte da un valore base. Poi:
-              <br><b>Like</b> → aumento piccolo
-              <br><b>Visualizzazioni</b> → aumento micro
-              <br><b>Offerte</b> → aumento più forte (domanda)
-            </p>
-            <div class="formula">
-              <code>
-                value = base + likes*0.45 + views*0.02 + offerImpact
-              </code>
-              <span class="muted small">offerImpact dipende da quante offerte e da quanto sono “aggressive”.</span>
-            </div>
+        <div class="how__card reveal">
+          <div class="how__icon">◉</div>
+          <h3>Visualizzazioni → interesse costante</h3>
+          <p>Più persone guardano, più cresce l’interesse: micro-incremento continuo.</p>
+        </div>
+
+        <div class="how__card reveal">
+          <div class="how__icon">⇡</div>
+          <h3>Offerte simulate → domanda</h3>
+          <p>Un’offerta indica domanda: incremento più forte e “shock” sul trend.</p>
+        </div>
+
+        <div class="how__panel reveal">
+          <div class="codebox">
+            <div class="codebox__title">Formula (semplice, leggibile)</div>
+            <pre><code>valore_attuale = base
+  + (like * coeffLike)
+  + (visualizzazioni * coeffView)
+  + (offerte * coeffOfferte)</code></pre>
           </div>
 
-          <div class="card card--glass">
-            <h3 class="h3">Simulazione educativa</h3>
-            <p class="muted">
-              Nessun denaro reale: tutte le azioni avvengono in MuseCredits (MΞ).
-              È una demo per portfolio/pitch.
-            </p>
-            <ul class="bullets muted">
-              <li>Mercato fittizio, aggiornamenti in tempo reale nel browser</li>
-              <li>Login mock (localStorage)</li>
-              <li>Storico valori + grafici</li>
-            </ul>
-          </div>
-
-          <div class="card card--glass">
-            <h3 class="h3">Esperienza “Museo del futuro”</h3>
-            <p class="muted">
-              UI immersiva: glow, profondità, parallax, micro-animazioni.
-            </p>
-            <div class="tagrow">
-              <span class="pill">Dark + Neon</span>
-              <span class="pill">Parallax</span>
-              <span class="pill">Micro-interactions</span>
-              <span class="pill">Charts</span>
-            </div>
+          <div class="note">
+            <b>Nota:</b> questa BETA è progettata come <b>Fase 1 simulata</b> (valuta virtuale),
+            coerente con la roadmap verso una futura Fase 2 con pagamenti reali (non inclusi qui). :contentReference[oaicite:1]{index=1}
           </div>
         </div>
       </div>
     </section>
 
     <!-- ROADMAP -->
-    <section id="roadmap" class="section section--alt">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Roadmap & Vision</h2>
-          <p class="muted reveal">
-            Dalla beta simulata alla piattaforma reale: crescita graduale e scalabile.
-          </p>
+    <section class="section" id="roadmap">
+      <div class="section__head">
+        <h2 class="section__title">Roadmap & Vision</h2>
+        <p class="section__desc">
+          Timeline credibile: dalla demo scolastica alla piattaforma scalabile.
+        </p>
+      </div>
+
+      <div class="timeline">
+        <div class="timeline__item reveal">
+          <div class="timeline__step">Fase 1</div>
+          <div class="timeline__content">
+            <h3>Beta simulata (questa demo)</h3>
+            <ul>
+              <li>Crediti virtuali (MCR)</li>
+              <li>Galleria interattiva</li>
+              <li>Mercato simulato + trend</li>
+              <li>Login/profilo mock</li>
+            </ul>
+          </div>
         </div>
 
-        <div class="timeline reveal">
-          <div class="step">
-            <div class="step__top">
-              <span class="pill pill--neon">FASE 1</span>
-              <span class="muted">Beta simulata</span>
-            </div>
-            <h3 class="h3">Prototipo scolastico / pitch</h3>
-            <p class="muted">
-              Crediti virtuali, login, galleria interattiva e borsa simulata.
-            </p>
+        <div class="timeline__item reveal">
+          <div class="timeline__step">Fase 2</div>
+          <div class="timeline__content">
+            <h3>Mercato reale (futuro)</h3>
+            <ul>
+              <li>Pagamenti reali (Stripe/PayPal)</li>
+              <li>Valuta interna convertibile</li>
+              <li>Backend + sicurezza + GDPR</li>
+              <li>Prezzi in tempo reale</li>
+            </ul>
           </div>
+        </div>
 
-          <div class="step">
-            <div class="step__top">
-              <span class="pill">FASE 2</span>
-              <span class="muted">Mercato reale</span>
-            </div>
-            <h3 class="h3">Pagamenti + backend + sicurezza</h3>
-            <p class="muted">
-              Pagamenti reali, acquisto/rivendita, algoritmo realtime, valuta interna convertibile.
-            </p>
-          </div>
-
-          <div class="step">
-            <div class="step__top">
-              <span class="pill">FUTURO</span>
-              <span class="muted">SRLS + scaling</span>
-            </div>
-            <h3 class="h3">Struttura legale + espansione</h3>
-            <p class="muted">
-              SRLS → crescita → espansione internazionale.
-            </p>
+        <div class="timeline__item reveal">
+          <div class="timeline__step">Fase futura</div>
+          <div class="timeline__content">
+            <h3>SRLS → App → Internazionale</h3>
+            <ul>
+              <li>Costituzione SRLS per scalare e attrarre investitori</li>
+              <li>App mobile (iOS/Android)</li>
+              <li>Espansione internazionale</li>
+            </ul>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- INVESTORS -->
-    <section id="investors" class="section">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Highlight per Investitori</h2>
-          <p class="muted reveal">
-            Perché Meta Museum può diventare un nuovo standard di investimento artistico digitale.
-          </p>
+    <!-- PROFILO -->
+    <section class="section" id="profile">
+      <div class="section__head">
+        <h2 class="section__title">Login / Profilo (mock)</h2>
+        <p class="section__desc">
+          Login semplificato: username salvato in localStorage. Saldo, opere seguite e cronologia interazioni.
+        </p>
+      </div>
+
+      <div class="profile">
+        <div class="profile__card reveal">
+          <div class="profile__head">
+            <div>
+              <div class="profile__name" id="profileName">Ospite</div>
+              <div class="profile__sub">Profilo demo • dati salvati nel browser</div>
+            </div>
+            <button class="btn btn--secondary" id="btnReset">Reset demo</button>
+          </div>
+
+          <div class="profile__stats">
+            <div class="stat">
+              <div class="stat__label">Saldo</div>
+              <div class="stat__value" id="profileBalance">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Like totali</div>
+              <div class="stat__value" id="profileLikes">—</div>
+            </div>
+            <div class="stat">
+              <div class="stat__label">Offerte totali</div>
+              <div class="stat__value" id="profileOffers">—</div>
+            </div>
+          </div>
         </div>
 
-        <div class="invest reveal">
-          <div class="card card--glass">
-            <h3 class="h3">Punti di forza</h3>
-            <ul class="bullets muted">
-              <li>Mercato dinamico basato su interazioni reali (like, views, offerte).</li>
-              <li>Algoritmo trasparente e democratico: chiunque può influenzare il valore.</li>
-              <li>Esperienza museo immersiva + “borsa” artistica in un unico prodotto.</li>
-              <li>Progetto giovane e innovativo “made in Italy”.</li>
-            </ul>
-          </div>
-
-          <div class="card card--glass">
-            <h3 class="h3">Potenziale Fase 2</h3>
-            <ul class="bullets muted">
-              <li>Pagamenti reali + wallet interno convertibile.</li>
-              <li>Market aperto: acquisto, rivendita, commissioni, partnership.</li>
-              <li>App mobile + scalabilità internazionale.</li>
-            </ul>
-            <div class="pill pill--live">Demo oggi → prodotto domani</div>
-          </div>
-
-          <div class="card card--glass">
-            <h3 class="h3">Nota</h3>
-            <p class="muted">
-              In questa beta: <b>nessuna transazione reale</b>.
-              In futuro: compliance, sicurezza, termini e GDPR.
-            </p>
-          </div>
+        <div class="profile__panel reveal">
+          <h3>Cronologia (ultime 12)</h3>
+          <div class="history" id="historyList"></div>
         </div>
       </div>
     </section>
 
-    <!-- PROFILE / LOGIN -->
-    <section id="profile" class="section section--alt">
-      <div class="wrap">
-        <div class="section__head">
-          <h2 class="h2 reveal">Login / Profilo (demo)</h2>
-          <p class="muted reveal">Login semplificato: username salvato nel browser. Saldo e cronologia in localStorage.</p>
+    <!-- HIGHLIGHT INVESTITORI -->
+    <section class="section" id="investors">
+      <div class="section__head">
+        <h2 class="section__title">Highlight per Investitori</h2>
+        <p class="section__desc">
+          Punti chiave e potenziale evoluzione (senza cripto, accessibile).
+        </p>
+      </div>
+
+      <div class="investors">
+        <div class="investors__card reveal">
+          <h3>Punti di forza</h3>
+          <ul>
+            <li>Algoritmo <b>democratico e trasparente</b>: interazioni → valore</li>
+            <li>Mercato dinamico dell’arte basato su segnali reali (like/views/offerte)</li>
+            <li>Progetto <b>giovanile</b> e <b>made in Italy</b></li>
+            <li>Accessibile: nessun requisito crypto nella Fase 1</li>
+          </ul>
         </div>
 
-        <div class="profile reveal">
-          <div class="card card--glass">
-            <h3 class="h3">Accesso rapido</h3>
-            <form id="loginForm" class="login">
-              <label class="muted small" for="usernameInput">Username</label>
-              <input id="usernameInput" type="text" placeholder="es. irusha" minlength="2" maxlength="18" />
-              <button class="btn btn--primary" type="submit">Entra</button>
-              <button id="btnLogout" class="btn btn--ghost" type="button">Logout</button>
-            </form>
-            <p class="muted small">
-              All’ingresso ricevi <b>1.500 MΞ</b> per simulare offerte e interazioni.
-            </p>
-          </div>
-
-          <div class="card card--glass">
-            <h3 class="h3">Il tuo profilo</h3>
-            <div class="profile__row">
-              <div>
-                <div class="muted small">Utente</div>
-                <div class="big" id="profileName">—</div>
-              </div>
-              <div>
-                <div class="muted small">Saldo</div>
-                <div class="big"><span id="profileBalance">—</span> <span class="muted">MΞ</span></div>
-              </div>
-            </div>
-
-            <div class="profile__cols">
-              <div>
-                <div class="muted small">Opere seguite</div>
-                <div id="followedList" class="mini-list"></div>
-              </div>
-              <div>
-                <div class="muted small">Cronologia</div>
-                <div id="activityList" class="mini-list"></div>
-              </div>
-            </div>
-          </div>
+        <div class="investors__card reveal">
+          <h3>Potenziale Fase 2</h3>
+          <ul>
+            <li>Pagamenti reali + wallet interno</li>
+            <li>Valuta interna convertibile (regole e compliance)</li>
+            <li>App mobile + crescita community</li>
+            <li>Scalabilità internazionale</li>
+          </ul>
         </div>
       </div>
     </section>
 
     <footer class="footer">
-      <div class="wrap footer__inner">
-        <div class="muted small">
-          © Meta Museum (Beta demo) — Crediti virtuali, nessun pagamento reale.
-        </div>
-        <div class="muted small">
-          UI/UX + FE Demo: GitHub Pages ready.
-        </div>
+      <div class="footer__left">
+        <div class="footer__title">Meta Museum — BETA</div>
+        <div class="footer__sub">Demo non commerciale • dati simulati • nessun pagamento reale</div>
+      </div>
+      <div class="footer__right">
+        <button class="navlink" data-scroll="#home">Torna su</button>
       </div>
     </footer>
   </main>
 
-  <!-- MODAL ARTWORK -->
-  <div id="artModal" class="modal" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-label="Dettagli opera">
+  <!-- MODALE OPERA (fullscreen) -->
+  <div class="modal" id="artModal" aria-hidden="true" role="dialog" aria-label="Dettagli opera">
     <div class="modal__backdrop" data-close="1"></div>
     <div class="modal__panel" role="document">
-      <button class="modal__close" data-close="1" type="button" aria-label="Chiudi">×</button>
+      <button class="modal__close" data-close="1" aria-label="Chiudi">✕</button>
 
       <div class="modal__content">
         <div class="modal__media">
-          <img id="modalImg" alt="" />
-          <div class="modal__badges">
-            <span class="pill pill--neon" id="modalValuePill">—</span>
-            <span class="pill" id="modalTrendPill">—</span>
+          <div class="artview" id="modalArtView">
+            <img id="modalImg" alt="" />
+            <div class="artview__frame"></div>
+            <div class="artview__glow"></div>
           </div>
         </div>
 
         <div class="modal__info">
-          <div class="modal__top">
-            <h3 class="h3" id="modalTitle">—</h3>
-            <div class="muted" id="modalArtist">—</div>
+          <div class="modal__meta">
+            <div class="badge" id="modalCategory">—</div>
+            <div class="badge badge--soft">Simulazione</div>
           </div>
 
-          <p class="muted" id="modalDesc">—</p>
+          <h2 class="modal__title" id="modalTitle">—</h2>
+          <div class="modal__artist" id="modalArtist">—</div>
+          <p class="modal__desc" id="modalDesc">—</p>
 
-          <div class="modal__metrics">
-            <div class="metric"><span class="muted small">Like</span><span id="modalLikes" class="big">—</span></div>
-            <div class="metric"><span class="muted small">Views</span><span id="modalViews" class="big">—</span></div>
-            <div class="metric"><span class="muted small">Offerte</span><span id="modalOffers" class="big">—</span></div>
-          </div>
-
-          <!-- saldo visibile (bugfix UX offerta) -->
-          <div class="modal__wallet muted small">
-            Saldo disponibile: <b><span id="modalBalance">—</span> MΞ</b>
+          <div class="modal__stats">
+            <div class="mini">
+              <div class="mini__label">Valore</div>
+              <div class="mini__value" id="modalValue">—</div>
+            </div>
+            <div class="mini">
+              <div class="mini__label">Like</div>
+              <div class="mini__value" id="modalLikes">—</div>
+            </div>
+            <div class="mini">
+              <div class="mini__label">Views</div>
+              <div class="mini__value" id="modalViews">—</div>
+            </div>
+            <div class="mini">
+              <div class="mini__label">Offerte</div>
+              <div class="mini__value" id="modalOffers">—</div>
+            </div>
           </div>
 
           <div class="modal__chart">
-            <div class="muted small">Storico valore (simulato)</div>
-            <canvas id="valueChart" height="140" aria-label="Grafico valore"></canvas>
+            <div class="charthead">
+              <div class="charthead__title">Storico valore (simulato)</div>
+              <div class="charthead__sub">Ultimi aggiornamenti</div>
+            </div>
+            <canvas id="modalChart" height="160"></canvas>
           </div>
 
           <div class="modal__actions">
-            <button id="btnLike" class="btn btn--ghost" type="button">Metti like</button>
-            <button id="btnFollow" class="btn btn--ghost" type="button">Segui</button>
-
-            <div class="offer">
-              <input id="offerInput" type="number" min="1" step="1" placeholder="Offerta (MΞ)" />
-              <button id="btnOffer" class="btn btn--primary" type="button">Fai offerta</button>
-            </div>
-
-            <div class="offer__chips" aria-label="Suggerimenti offerta">
-              <button class="chip2" data-offerchip="5" type="button">+5%</button>
-              <button class="chip2" data-offerchip="10" type="button">+10%</button>
-              <button class="chip2" data-offerchip="20" type="button">+20%</button>
-            </div>
-
-            <button id="btnShare" class="btn btn--ghost" type="button">Condividi</button>
+            <button class="btn btn--secondary" id="modalLikeBtn">
+              Metti like
+              <span class="btn__glow"></span>
+            </button>
+            <button class="btn btn--primary" id="modalOfferBtn">
+              Offerta simulata
+              <span class="btn__glow"></span>
+            </button>
+            <button class="btn btn--ghost" id="modalShareBtn">
+              Condividi
+            </button>
           </div>
 
-          <div class="modal__fineprint muted small">
-            Interazioni simulate: il valore cambia nel browser per mostrare l’idea.
+          <!-- pannello offerta (semplice ma “wow”) -->
+          <div class="offerbox" id="offerBox" hidden>
+            <div class="offerbox__row">
+              <div class="offerbox__label">Importo offerta (MCR)</div>
+              <div class="offerbox__value" id="offerValueLabel">—</div>
+            </div>
+            <input id="offerRange" type="range" min="1" max="50" value="10" />
+            <div class="offerbox__row offerbox__row--actions">
+              <button class="btn btn--secondary" id="offerCancel">Annulla</button>
+              <button class="btn btn--primary" id="offerConfirm">Conferma offerta</button>
+            </div>
+            <div class="offerbox__hint">
+              L’offerta aumenta il valore dell’opera (simulazione). In questa demo il saldo viene scalato per realismo.
+            </div>
+          </div>
+
+          <div class="modal__formula">
+            <div class="formula">
+              <div class="formula__title">Algoritmo trasparente</div>
+              <div class="formula__text" id="modalFormula">—</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <div id="toast" class="toast" aria-live="polite" aria-atomic="true" hidden></div>
+  <!-- MODALE LOGIN -->
+  <div class="modal" id="loginModal" aria-hidden="true" role="dialog" aria-label="Login demo">
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel modal__panel--small" role="document">
+      <button class="modal__close" data-close="1" aria-label="Chiudi">✕</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+      <div class="login">
+        <h2>Login demo</h2>
+        <p>Inserisci uno username. Verrà salvato nel browser (localStorage).</p>
 
-  <script src="app.js"></script>
+        <label class="field">
+          <span>Username</span>
+          <input id="loginInput" type="text" placeholder="es. Irusha" maxlength="18" />
+        </label>
+
+        <button class="btn btn--primary" id="loginConfirm">
+          Entra
+          <span class="btn__glow"></span>
+        </button>
+
+        <div class="login__note">
+          Nessun account reale. Nessun pagamento. Solo simulazione didattica.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" aria-live="polite" aria-atomic="true"></div>
+
+  <script src="./script.js"></script>
 </body>
 </html>
