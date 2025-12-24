@@ -6,7 +6,6 @@
   <title>Meta Museum — Beta</title>
   <meta name="description" content="Museo digitale interattivo dove ogni interazione genera valore (demo simulata)." />
 
-  <!-- Font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +14,6 @@
 </head>
 
 <body>
-  <!-- Top glow background -->
   <div class="bg-noise" aria-hidden="true"></div>
   <div class="bg-aurora" aria-hidden="true"></div>
 
@@ -139,7 +137,7 @@
     </section>
 
     <!-- GALLERY -->
-    <section id="gallery" class="section">
+    <section id="gallery" class="section museum-hall">
       <div class="wrap">
         <div class="section__head">
           <h2 class="h2 reveal">Galleria opere</h2>
@@ -163,7 +161,7 @@
           </div>
         </div>
 
-        <div id="galleryGrid" class="grid" aria-live="polite"></div>
+        <div id="galleryGrid" class="grid grid--museum" aria-live="polite"></div>
       </div>
     </section>
 
@@ -208,7 +206,7 @@
               <code>
                 value = base + likes*0.45 + views*0.02 + offerImpact
               </code>
-              <span class="muted small">offferImpact dipende da quante offerte e da quanto sono “aggressive”.</span>
+              <span class="muted small">offerImpact dipende da quante offerte e da quanto sono “aggressive”.</span>
             </div>
           </div>
 
@@ -216,7 +214,7 @@
             <h3 class="h3">Simulazione educativa</h3>
             <p class="muted">
               Nessun denaro reale: tutte le azioni avvengono in MuseCredits (MΞ).
-              È una demo per portfolio/pitch, come previsto nella Fase 1 del progetto. :contentReference[oaicite:1]{index=1}
+              È una demo per portfolio/pitch.
             </p>
             <ul class="bullets muted">
               <li>Mercato fittizio, aggiornamenti in tempo reale nel browser</li>
@@ -228,8 +226,7 @@
           <div class="card card--glass">
             <h3 class="h3">Esperienza “Museo del futuro”</h3>
             <p class="muted">
-              UI immersiva: glow, profondità, parallax, micro-animazioni. L’obiettivo è far percepire
-              un prodotto già “pronto” ma senza complessità backend.
+              UI immersiva: glow, profondità, parallax, micro-animazioni.
             </p>
             <div class="tagrow">
               <span class="pill">Dark + Neon</span>
@@ -248,7 +245,7 @@
         <div class="section__head">
           <h2 class="h2 reveal">Roadmap & Vision</h2>
           <p class="muted reveal">
-            Dalla beta simulata alla piattaforma reale: crescita graduale e scalabile. :contentReference[oaicite:2]{index=2}
+            Dalla beta simulata alla piattaforma reale: crescita graduale e scalabile.
           </p>
         </div>
 
@@ -261,9 +258,7 @@
             <h3 class="h3">Prototipo scolastico / pitch</h3>
             <p class="muted">
               Crediti virtuali, login, galleria interattiva e borsa simulata.
-              Ideale per portfolio e richieste fondi. :contentReference[oaicite:3]{index=3}
             </p>
-            <div class="small muted">Costo stimato: ~0–500€ (con supporto scuola può essere quasi zero). :contentReference[oaicite:4]{index=4}</div>
           </div>
 
           <div class="step">
@@ -273,9 +268,8 @@
             </div>
             <h3 class="h3">Pagamenti + backend + sicurezza</h3>
             <p class="muted">
-              Pagamenti reali, acquisto/rivendita, algoritmo realtime, valuta interna convertibile. :contentReference[oaicite:5]{index=5}
+              Pagamenti reali, acquisto/rivendita, algoritmo realtime, valuta interna convertibile.
             </p>
-            <div class="small muted">Costo stimato: ~2.500–6.000€. :contentReference[oaicite:6]{index=6}</div>
           </div>
 
           <div class="step">
@@ -285,9 +279,8 @@
             </div>
             <h3 class="h3">Struttura legale + espansione</h3>
             <p class="muted">
-              Costituzione SRLS (più accessibile per giovani founder), poi evoluzione verso SRL e crescita internazionale. :contentReference[oaicite:7]{index=7}
+              SRLS → crescita → espansione internazionale.
             </p>
-            <div class="small muted">SRLS: apertura ~300–500€, spese annuali ~1.000–1.500€. :contentReference[oaicite:8]{index=8}</div>
           </div>
         </div>
       </div>
@@ -299,7 +292,7 @@
         <div class="section__head">
           <h2 class="h2 reveal">Highlight per Investitori</h2>
           <p class="muted reveal">
-            Perché Meta Museum può diventare un nuovo standard di investimento artistico digitale. :contentReference[oaicite:9]{index=9}
+            Perché Meta Museum può diventare un nuovo standard di investimento artistico digitale.
           </p>
         </div>
 
@@ -307,28 +300,28 @@
           <div class="card card--glass">
             <h3 class="h3">Punti di forza</h3>
             <ul class="bullets muted">
-              <li>Mercato dinamico basato su interazioni reali (like, views, offerte). :contentReference[oaicite:10]{index=10}</li>
-              <li>Algoritmo trasparente e democratico: chiunque può influenzare il valore. :contentReference[oaicite:11]{index=11}</li>
+              <li>Mercato dinamico basato su interazioni reali (like, views, offerte).</li>
+              <li>Algoritmo trasparente e democratico: chiunque può influenzare il valore.</li>
               <li>Esperienza museo immersiva + “borsa” artistica in un unico prodotto.</li>
-              <li>Progetto giovane e innovativo “made in Italy”. :contentReference[oaicite:12]{index=12}</li>
+              <li>Progetto giovane e innovativo “made in Italy”.</li>
             </ul>
           </div>
 
           <div class="card card--glass">
             <h3 class="h3">Potenziale Fase 2</h3>
             <ul class="bullets muted">
-              <li>Pagamenti reali + wallet interno convertibile (compliance e sicurezza).</li>
-              <li>Market aperto: acquisto, rivendita, commissioni, partner con artisti.</li>
+              <li>Pagamenti reali + wallet interno convertibile.</li>
+              <li>Market aperto: acquisto, rivendita, commissioni, partnership.</li>
               <li>App mobile + scalabilità internazionale.</li>
             </ul>
             <div class="pill pill--live">Demo oggi → prodotto domani</div>
           </div>
 
           <div class="card card--glass">
-            <h3 class="h3">Nota legale</h3>
+            <h3 class="h3">Nota</h3>
             <p class="muted">
               In questa beta: <b>nessuna transazione reale</b>.
-              In futuro: GDPR, termini d’uso e pagamenti conformi. :contentReference[oaicite:13]{index=13}
+              In futuro: compliance, sicurezza, termini e GDPR.
             </p>
           </div>
         </div>
@@ -426,6 +419,11 @@
             <div class="metric"><span class="muted small">Offerte</span><span id="modalOffers" class="big">—</span></div>
           </div>
 
+          <!-- saldo visibile (bugfix UX offerta) -->
+          <div class="modal__wallet muted small">
+            Saldo disponibile: <b><span id="modalBalance">—</span> MΞ</b>
+          </div>
+
           <div class="modal__chart">
             <div class="muted small">Storico valore (simulato)</div>
             <canvas id="valueChart" height="140" aria-label="Grafico valore"></canvas>
@@ -440,6 +438,12 @@
               <button id="btnOffer" class="btn btn--primary" type="button">Fai offerta</button>
             </div>
 
+            <div class="offer__chips" aria-label="Suggerimenti offerta">
+              <button class="chip2" data-offerchip="5" type="button">+5%</button>
+              <button class="chip2" data-offerchip="10" type="button">+10%</button>
+              <button class="chip2" data-offerchip="20" type="button">+20%</button>
+            </div>
+
             <button id="btnShare" class="btn btn--ghost" type="button">Condividi</button>
           </div>
 
@@ -451,14 +455,10 @@
     </div>
   </div>
 
-  <!-- Toast -->
   <div id="toast" class="toast" aria-live="polite" aria-atomic="true" hidden></div>
 
-  <!-- GSAP (wow) -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
   <script src="app.js"></script>
