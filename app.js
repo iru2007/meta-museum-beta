@@ -1,29 +1,22 @@
 /* =========================================================
    META MUSEUM — BETA (NO BACKEND)
-   - Dati fittizi in JS
-   - Stato + localStorage
-   - Algoritmo trasparente valore dinamico
-   - Modal + Chart.js + sparklines
-   - Animazioni: GSAP + ScrollTrigger
+   Fix principali:
+   - BUG/OFFERTA: focus, invio con Enter, chip +%, saldo visibile, prefill intelligente
+   - Robustezza: normalizzazione dati (no NaN), history sempre coerente
+   - Effetto museo: 3D tilt + spotlight su cards (mouse follow)
    ========================================================= */
 
-/** Nome moneta interna (virtuale) */
 const CURRENCY_NAME = "MuseCredits";
 const CURRENCY_SYMBOL = "MΞ";
+const LS_KEY = "meta_museum_beta_v2";
 
-/** localStorage key */
-const LS_KEY = "meta_museum_beta_v1";
-
-/* ---------------------------------------------------------
-   1) DATASET FINTIZIO (aggiungere opere = aggiungere oggetti qui)
-   --------------------------------------------------------- */
 const DEFAULT_DATA = {
   user: {
     username: null,
     balance: 0,
-    followed: [], // array di artworkId
-    likes: {},    // artworkId -> true
-    activity: []  // log azioni
+    followed: [],
+    likes: {},
+    activity: []
   },
   artworks: [
     {
@@ -101,26 +94,22 @@ const DEFAULT_DATA = {
   ]
 };
 
-/* ---------------------------------------------------------
-   2) STATE + PERSISTENZA
-   --------------------------------------------------------- */
 let state = loadState();
 let currentArtworkId = null;
+let chart = null;
 
 function loadState(){
   try{
     const raw = localStorage.getItem(LS_KEY);
-    if(!raw) return structuredClone(DEFAULT_DATA);
+    if(!raw) return normalizeState(structuredClone(DEFAULT_DATA));
     const parsed = JSON.parse(raw);
-
-    // Merge soft: se aggiorni DEFAULT_DATA in futuro, non rompi la demo
-    return {
+    return normalizeState({
       user: { ...DEFAULT_DATA.user, ...(parsed.user || {}) },
       artworks: Array.isArray(parsed.artworks) ? parsed.artworks : structuredClone(DEFAULT_DATA.artworks)
-    };
+    });
   }catch(e){
-    console.warn("Errore loadState, resetto demo:", e);
-    return structuredClone(DEFAULT_DATA);
+    console.warn("Errore loadState, resetto:", e);
+    return normalizeState(structuredClone(DEFAULT_DATA));
   }
 }
 
@@ -128,18 +117,39 @@ function saveState(){
   localStorage.setItem(LS_KEY, JSON.stringify(state));
 }
 
-/* ---------------------------------------------------------
-   3) ALGORITMO VALORE DINAMICO (trasparente e commentato)
-   ---------------------------------------------------------
-   Obiettivo: simulare un prezzo che reagisce a:
-   - like: aumento piccolo
-   - views: aumento micro
-   - offerte: aumento più forte (domanda)
-*/
+function normalizeState(s){
+  s.user = s.user || structuredClone(DEFAULT_DATA.user);
+  s.user.followed = Array.isArray(s.user.followed) ? s.user.followed : [];
+  s.user.likes = s.user.likes && typeof s.user.likes === "object" ? s.user.likes : {};
+  s.user.activity = Array.isArray(s.user.activity) ? s.user.activity : [];
+  s.user.balance = Number.isFinite(Number(s.user.balance)) ? Number(s.user.balance) : 0;
+
+  s.artworks = Array.isArray(s.artworks) ? s.artworks : [];
+  s.artworks = s.artworks.map(normalizeArtwork);
+  return s;
+}
+
+function normalizeArtwork(a){
+  const art = { ...a };
+  art.base = safeNum(art.base, 10);
+  art.likes = safeNum(art.likes, 0);
+  art.views = safeNum(art.views, 0);
+  art.offers = Array.isArray(art.offers) ? art.offers.map(v=>Math.max(0, Math.floor(safeNum(v,0)))) : [];
+  art.history = Array.isArray(art.history) ? art.history.map(v=>safeNum(v, art.base)) : [art.base];
+
+  // evita history vuota
+  if(art.history.length === 0) art.history = [art.base];
+
+  return art;
+}
+
+function safeNum(v, fallback=0){
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+/* ===== Algoritmo ===== */
 function computeOfferImpact(offers){
-  // "Domanda" simulata: offerta più alta pesa di più, ma senza esplodere
-  // Usiamo una radice per comprimere valori grandi (effetto realistico).
-  // Esempio: 25 MΞ -> sqrt(25)=5 -> impatto = 5*0.9 = 4.5
   let sum = 0;
   for(const v of offers){
     sum += Math.sqrt(Math.max(0, v)) * 0.9;
@@ -150,39 +160,29 @@ function computeOfferImpact(offers){
 function computeValue(art){
   const offerImpact = computeOfferImpact(art.offers);
   const value = art.base + art.likes * 0.45 + art.views * 0.02 + offerImpact;
-  // Arrotondamento "da mercato" (2 decimali)
   return Math.round(value * 100) / 100;
 }
 
 function computeTrend(art){
-  // Trend = differenza tra ultimo e penultimo valore nello storico
   const h = art.history || [];
   if(h.length < 2) return 0;
   return Math.round((h[h.length - 1] - h[h.length - 2]) * 100) / 100;
 }
 
 function pushHistory(art){
-  // Ogni azione aggiorna lo storico con il nuovo valore
   const v = computeValue(art);
   if(!Array.isArray(art.history)) art.history = [];
   art.history.push(v);
-
-  // Limite: teniamo max 18 punti per grafici/sparklines snelli
   if(art.history.length > 18) art.history = art.history.slice(-18);
 }
 
-/* ---------------------------------------------------------
-   4) HELPERS UI
-   --------------------------------------------------------- */
+/* ===== Helpers UI ===== */
 const $ = (q, root=document) => root.querySelector(q);
 const $$ = (q, root=document) => Array.from(root.querySelectorAll(q));
 
-function fmt(n){
-  return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 }).format(n);
-}
-function money(n){
-  return `${fmt(n)} ${CURRENCY_SYMBOL}`;
-}
+function fmt(n){ return new Intl.NumberFormat("it-IT", { maximumFractionDigits: 2 }).format(n); }
+function money(n){ return `${fmt(n)} ${CURRENCY_SYMBOL}`; }
+
 function toast(msg){
   const el = $("#toast");
   el.textContent = msg;
@@ -197,28 +197,27 @@ function nowTag(){
   const d = new Date();
   return d.toLocaleString("it-IT", { day:"2-digit", month:"2-digit", hour:"2-digit", minute:"2-digit" });
 }
-
+function addActivity(type, detail){
+  if(!state.user.username) return;
+  state.user.activity.unshift({ at: nowTag(), type, detail });
+  state.user.activity = state.user.activity.slice(0, 20);
+}
 function requireLogin(){
   if(state.user.username) return true;
   toast("Fai login per continuare (demo).");
   scrollToId("profile");
   return false;
 }
-
-function addActivity(type, detail){
-  if(!state.user.username) return;
-  state.user.activity.unshift({
-    at: nowTag(),
-    type,
-    detail
-  });
-  // limite log
-  state.user.activity = state.user.activity.slice(0, 20);
+function escapeHtml(str){
+  return String(str)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-/* ---------------------------------------------------------
-   5) RENDER: HERO STATS
-   --------------------------------------------------------- */
+/* ===== HERO STATS ===== */
 function renderHeroStats(){
   $("#statArtworks").textContent = state.artworks.length;
 
@@ -231,20 +230,15 @@ function renderHeroStats(){
   $("#statVolume").textContent = fmt(volume);
   $("#statInteractions").textContent = fmt(interactions);
 
-  // mini live widget in hero
   $("#heroLiveValue").textContent = money(computeValue(state.artworks[0]));
 }
 
-/* ---------------------------------------------------------
-   6) RENDER: GALLERY
-   --------------------------------------------------------- */
+/* ===== GALLERY ===== */
 function getGalleryList(){
   const q = ($("#searchInput").value || "").trim().toLowerCase();
   const sort = $("#sortSelect").value;
 
   let list = state.artworks.slice();
-
-  // search
   if(q){
     list = list.filter(a =>
       a.title.toLowerCase().includes(q) ||
@@ -252,7 +246,6 @@ function getGalleryList(){
     );
   }
 
-  // sort
   if(sort === "value_desc"){
     list.sort((a,b) => computeValue(b) - computeValue(a));
   }else if(sort === "likes_desc"){
@@ -260,7 +253,6 @@ function getGalleryList(){
   }else if(sort === "views_desc"){
     list.sort((a,b) => b.views - a.views);
   }else{
-    // trending: mix valore + trend + likes
     list.sort((a,b) => {
       const sa = computeValue(a) + computeTrend(a) * 4 + a.likes * 0.1;
       const sb = computeValue(b) + computeTrend(b) * 4 + b.likes * 0.1;
@@ -315,49 +307,26 @@ function renderGallery(){
       </div>
     `;
 
-    // click card opens modal (view)
     card.addEventListener("click", (e)=>{
-      // se clicco bottone gestito sotto, evito doppio
       if(e.target?.matches?.("button")) return;
-      openArtwork(art.id, { countView: true });
+      openArtwork(art.id, { countView:true });
     });
     card.addEventListener("keydown", (e)=>{
       if(e.key === "Enter" || e.key === " "){
         e.preventDefault();
-        openArtwork(art.id, { countView: true });
+        openArtwork(art.id, { countView:true });
       }
     });
 
     grid.appendChild(card);
   }
+
+  // WOW: attiva tilt/parallax su nuove cards dopo ogni render
+  applyTiltToSelector(".art");
 }
 
-/* ---------------------------------------------------------
-   7) RENDER: MARKET (tabs)
-   --------------------------------------------------------- */
+/* ===== MARKET ===== */
 let marketMode = "popular";
-
-function getMarketList(){
-  const list = state.artworks.slice();
-  if(marketMode === "views"){
-    list.sort((a,b) => b.views - a.views);
-  }else if(marketMode === "gainers"){
-    // crescita: trend + (ultimo - primo nello storico)
-    list.sort((a,b)=>{
-      const ga = growthScore(a);
-      const gb = growthScore(b);
-      return gb - ga;
-    });
-  }else{
-    // popular: mix likes+views+offers
-    list.sort((a,b)=>{
-      const pa = a.likes*1.2 + a.views*0.08 + a.offers.length*6;
-      const pb = b.likes*1.2 + b.views*0.08 + b.offers.length*6;
-      return pb - pa;
-    });
-  }
-  return list.slice(0, 6);
-}
 
 function growthScore(a){
   const h = a.history || [];
@@ -365,6 +334,22 @@ function growthScore(a){
   const first = h[0];
   const last = h[h.length-1];
   return (last-first) + computeTrend(a)*2;
+}
+
+function getMarketList(){
+  const list = state.artworks.slice();
+  if(marketMode === "views"){
+    list.sort((a,b) => b.views - a.views);
+  }else if(marketMode === "gainers"){
+    list.sort((a,b)=> growthScore(b) - growthScore(a));
+  }else{
+    list.sort((a,b)=>{
+      const pa = a.likes*1.2 + a.views*0.08 + a.offers.length*6;
+      const pb = b.likes*1.2 + b.views*0.08 + b.offers.length*6;
+      return pb - pa;
+    });
+  }
+  return list.slice(0, 6);
 }
 
 function renderMarket(){
@@ -404,23 +389,19 @@ function renderMarket(){
     grid.appendChild(card);
   }
 
-  // disegna sparklines
   for(const a of list){
     const c = $(`canvas[data-spark="${a.id}"]`);
     if(c) drawSparkline(c, a.history || []);
   }
 }
 
-/* ---------------------------------------------------------
-   8) SPARKLINES (mini grafico veloce su canvas)
-   --------------------------------------------------------- */
+/* ===== SPARKLINES ===== */
 function drawSparkline(canvas, values){
   const ctx = canvas.getContext("2d");
   const w = canvas.width, h = canvas.height;
   ctx.clearRect(0,0,w,h);
 
   if(!values || values.length < 2){
-    // fallback: linea piatta
     ctx.globalAlpha = 0.7;
     ctx.fillStyle = "rgba(255,255,255,.10)";
     ctx.fillRect(0, h/2, w, 1);
@@ -438,11 +419,9 @@ function drawSparkline(canvas, values){
     return (h - pad) - t * (h - pad*2);
   };
 
-  // sfondo soft
   ctx.fillStyle = "rgba(255,255,255,.03)";
   ctx.fillRect(0,0,w,h);
 
-  // area glow
   ctx.beginPath();
   values.forEach((v,i)=>{
     const x = pad + i*xStep;
@@ -456,7 +435,6 @@ function drawSparkline(canvas, values){
   ctx.fillStyle = "rgba(34,211,238,.08)";
   ctx.fill();
 
-  // linea
   ctx.beginPath();
   values.forEach((v,i)=>{
     const x = pad + i*xStep;
@@ -468,7 +446,6 @@ function drawSparkline(canvas, values){
   ctx.strokeStyle = "rgba(34,211,238,.55)";
   ctx.stroke();
 
-  // punto ultimo
   const lx = pad + (values.length-1)*xStep;
   const ly = yMap(values[values.length-1]);
   ctx.beginPath();
@@ -477,14 +454,11 @@ function drawSparkline(canvas, values){
   ctx.fill();
 }
 
-/* ---------------------------------------------------------
-   9) MODAL + CHART.JS
-   --------------------------------------------------------- */
-let chart = null;
-
-function openArtwork(id, opts={ countView:false }){
+/* ===== MODAL + CHART ===== */
+function openArtwork(id, opts={ countView:false, focusOffer:false }){
   const art = state.artworks.find(a=>a.id===id);
   if(!art) return;
+
   currentArtworkId = id;
 
   if(opts.countView){
@@ -504,6 +478,9 @@ function openArtwork(id, opts={ countView:false }){
   $("#modalViews").textContent = fmt(art.views);
   $("#modalOffers").textContent = fmt(art.offers.length);
 
+  // saldo visibile in modal
+  $("#modalBalance").textContent = state.user.username ? fmt(state.user.balance) : "—";
+
   const v = computeValue(art);
   $("#modalValuePill").textContent = `Valore: ${money(v)}`;
 
@@ -511,24 +488,40 @@ function openArtwork(id, opts={ countView:false }){
   const isUp = t >= 0;
   $("#modalTrendPill").textContent = `${isUp ? "▲" : "▼"} Trend: ${fmt(Math.abs(t))} ${CURRENCY_SYMBOL}`;
 
-  // follow/like buttons label
   $("#btnLike").textContent = state.user.likes[id] ? "Like aggiunto ✓" : "Metti like";
   $("#btnFollow").textContent = state.user.followed.includes(id) ? "Segui ✓" : "Segui";
 
-  // reset offer input
-  $("#offerInput").value = "";
+  // prefill offerta intelligente (migliora UX + “wow”)
+  const offerInput = $("#offerInput");
+  const suggested = suggestOffer(art);
+  offerInput.placeholder = `Offerta (es. ${suggested} MΞ)`;
+  if(opts.focusOffer){
+    offerInput.value = suggested;
+  }else{
+    offerInput.value = "";
+  }
 
-  // show modal
+  showModal();
+  renderChart(art);
+
+  if(opts.focusOffer){
+    // focus leggermente dopo per evitare race con rendering
+    setTimeout(()=> offerInput.focus(), 30);
+  }
+}
+
+function suggestOffer(art){
+  const last = art.offers.length ? Math.max(...art.offers) : Math.max(1, Math.floor(computeValue(art) * 0.25));
+  // suggerimento: +8% sopra l'ultima offerta (min +1)
+  const s = Math.max(1, Math.floor(last * 1.08));
+  return s;
+}
+
+function showModal(){
   const modal = $("#artModal");
   modal.hidden = false;
   modal.setAttribute("aria-hidden","false");
   document.body.style.overflow = "hidden";
-
-  // chart
-  renderChart(art);
-
-  // wow small toast on view
-  if(opts.countView) toast("Visualizzazione registrata • valore aggiornato");
 }
 
 function closeModal(){
@@ -544,7 +537,6 @@ function renderChart(art){
   const data = (art.history || []).slice(-14);
   const labels = data.map((_,i)=> `${i+1}`);
 
-  // distruggi chart precedente
   if(chart){
     chart.destroy();
     chart = null;
@@ -571,28 +563,18 @@ function renderChart(art){
       plugins: {
         legend: { display:false },
         tooltip: {
-          callbacks: {
-            label: (ctx) => `${money(ctx.parsed.y)}`
-          }
+          callbacks: { label: (c) => `${money(c.parsed.y)}` }
         }
       },
       scales: {
-        x: {
-          grid: { color: "rgba(255,255,255,.06)" },
-          ticks: { color: "rgba(255,255,255,.55)" }
-        },
-        y: {
-          grid: { color: "rgba(255,255,255,.06)" },
-          ticks: { color: "rgba(255,255,255,.55)" }
-        }
+        x: { grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "rgba(255,255,255,.55)" } },
+        y: { grid: { color: "rgba(255,255,255,.06)" }, ticks: { color: "rgba(255,255,255,.55)" } }
       }
     }
   });
 }
 
-/* ---------------------------------------------------------
-   10) AZIONI: LIKE / FOLLOW / OFFER / SHARE
-   --------------------------------------------------------- */
+/* ===== AZIONI MODAL ===== */
 function likeCurrent(){
   const id = currentArtworkId;
   if(!id) return;
@@ -612,8 +594,8 @@ function likeCurrent(){
   addActivity("LIKE", `Hai messo like a "${art.title}"`);
 
   saveState();
-  openArtwork(id, { countView:false }); // refresh modal UI
   renderAll();
+  openArtwork(id, { countView:false, focusOffer:false }); // refresh modal
   toast("Like registrato • valore aggiornato");
 }
 
@@ -622,10 +604,10 @@ function followCurrent(){
   if(!id) return;
   if(!requireLogin()) return;
 
-  const i = state.user.followed.indexOf(id);
   const art = state.artworks.find(a=>a.id===id);
   if(!art) return;
 
+  const i = state.user.followed.indexOf(id);
   if(i >= 0){
     state.user.followed.splice(i,1);
     addActivity("UNFOLLOW", `Hai smesso di seguire "${art.title}"`);
@@ -635,9 +617,10 @@ function followCurrent(){
     addActivity("FOLLOW", `Stai seguendo "${art.title}"`);
     toast("Ora segui questa opera.");
   }
+
   saveState();
-  openArtwork(id, { countView:false });
   renderProfile();
+  openArtwork(id, { countView:false, focusOffer:false });
 }
 
 function offerCurrent(){
@@ -650,17 +633,19 @@ function offerCurrent(){
 
   const raw = $("#offerInput").value;
   const offer = Math.floor(Number(raw));
-  if(!offer || offer <= 0){
+
+  if(!Number.isFinite(offer) || offer <= 0){
     toast("Inserisci un’offerta valida (numero > 0).");
+    $("#offerInput").focus();
     return;
   }
 
   if(state.user.balance < offer){
     toast("Saldo insufficiente (demo).");
+    $("#offerInput").focus();
     return;
   }
 
-  // aggiorna saldo e offerte
   state.user.balance -= offer;
   art.offers.push(offer);
 
@@ -668,8 +653,8 @@ function offerCurrent(){
   addActivity("OFFER", `Offerta ${offer} ${CURRENCY_SYMBOL} su "${art.title}"`);
 
   saveState();
-  openArtwork(id, { countView:false });
   renderAll();
+  openArtwork(id, { countView:false, focusOffer:false });
   toast("Offerta registrata • valore aggiornato");
 }
 
@@ -691,9 +676,7 @@ async function shareCurrent(){
   }
 }
 
-/* ---------------------------------------------------------
-   11) LOGIN / LOGOUT
-   --------------------------------------------------------- */
+/* ===== LOGIN / PROFILE ===== */
 function renderNavUser(){
   $("#navUserLabel").textContent = state.user.username ? state.user.username : "Login";
 }
@@ -701,8 +684,8 @@ function renderNavUser(){
 function renderProfile(){
   $("#profileName").textContent = state.user.username ? state.user.username : "—";
   $("#profileBalance").textContent = state.user.username ? fmt(state.user.balance) : "—";
+  $("#btnLogout").disabled = !state.user.username;
 
-  // followed list
   const followed = $("#followedList");
   followed.innerHTML = "";
   if(!state.user.username){
@@ -727,7 +710,6 @@ function renderProfile(){
     }
   }
 
-  // activity
   const activity = $("#activityList");
   activity.innerHTML = "";
   if(!state.user.username){
@@ -748,19 +730,14 @@ function renderProfile(){
       activity.appendChild(row);
     }
   }
-
-  // enable/disable logout
-  $("#btnLogout").disabled = !state.user.username;
 }
 
 function login(username){
   state.user.username = username;
-  // saldo iniziale demo
   if(!state.user.balance || state.user.balance <= 0) state.user.balance = 1500;
   addActivity("LOGIN", `Accesso demo come ${username}`);
   saveState();
-  renderNavUser();
-  renderProfile();
+  renderAll();
   toast(`Benvenuto ${username} • saldo ${fmt(state.user.balance)} ${CURRENCY_SYMBOL}`);
 }
 
@@ -768,39 +745,62 @@ function logout(){
   if(!state.user.username) return;
   const old = state.user.username;
   state.user.username = null;
-  // NON resettiamo tutto: lasciamo demo viva, ma l'utente diventa anonimo
   saveState();
-  renderNavUser();
-  renderProfile();
+  renderAll();
   toast(`Logout: ${old}`);
 }
 
-/* ---------------------------------------------------------
-   12) EVENTI UI
-   --------------------------------------------------------- */
+/* ===== WOW: 3D TILT + spotlight follow ===== */
+function applyTiltToSelector(selector){
+  const els = $$(selector);
+  for(const el of els){
+    if(el.dataset.tiltBound === "1") continue;
+    el.dataset.tiltBound = "1";
+
+    const max = 8; // gradi
+    const prefersReduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+    const onMove = (e)=>{
+      if(prefersReduced) return;
+      const r = el.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width;
+      const py = (e.clientY - r.top) / r.height;
+
+      const ry = (px - 0.5) * (max * 2);
+      const rx = -(py - 0.5) * (max * 2);
+
+      el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+      el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+      el.style.setProperty("--px", `${(px*100).toFixed(1)}%`);
+      el.style.setProperty("--py", `${(py*100).toFixed(1)}%`);
+    };
+
+    const onLeave = ()=>{
+      el.style.setProperty("--rx", `0deg`);
+      el.style.setProperty("--ry", `0deg`);
+      el.style.setProperty("--px", `50%`);
+      el.style.setProperty("--py", `30%`);
+    };
+
+    el.addEventListener("mousemove", onMove);
+    el.addEventListener("mouseleave", onLeave);
+  }
+}
+
+/* ===== EVENTI ===== */
 function bindEvents(){
-  // nav buttons
   $("#btnEnterMuseum").addEventListener("click", ()=> scrollToId("gallery"));
   $("#btnScrollGallery").addEventListener("click", ()=> scrollToId("gallery"));
   $("#btnScrollMarket").addEventListener("click", ()=> scrollToId("market"));
   $("#btnOpenProfile").addEventListener("click", ()=> scrollToId("profile"));
 
-  // mobile menu
   const menu = $("#mobileMenu");
-  $("#btnMobileMenu").addEventListener("click", ()=>{
-    const isHidden = menu.hidden;
-    menu.hidden = !isHidden;
-  });
-  $("#btnMobileProfile").addEventListener("click", ()=>{
-    menu.hidden = true;
-    scrollToId("profile");
-  });
+  $("#btnMobileMenu").addEventListener("click", ()=>{ menu.hidden = !menu.hidden; });
+  $("#btnMobileProfile").addEventListener("click", ()=>{ menu.hidden = true; scrollToId("profile"); });
 
-  // gallery toolbar
   $("#searchInput").addEventListener("input", ()=> renderGallery());
   $("#sortSelect").addEventListener("change", ()=> renderGallery());
 
-  // reset demo
   $("#btnResetDemo").addEventListener("click", ()=>{
     localStorage.removeItem(LS_KEY);
     state = loadState();
@@ -808,29 +808,45 @@ function bindEvents(){
     toast("Demo resettata.");
   });
 
-  // delegated actions for gallery + market
+  // Delegation: gallery+market buttons
   document.body.addEventListener("click", (e)=>{
     const btn = e.target.closest("button[data-act]");
-    if(!btn) return;
-    const id = btn.getAttribute("data-id");
-    const act = btn.getAttribute("data-act");
-    if(!id) return;
+    if(btn){
+      const id = btn.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      if(!id) return;
 
-    if(act === "view"){
-      openArtwork(id, { countView:true });
-    }else if(act === "like"){
-      if(!requireLogin()) return;
-      // like senza aprire modal: apriamo e facciamo like
-      openArtwork(id, { countView:false });
-      likeCurrent();
-    }else if(act === "offer"){
-      if(!requireLogin()) return;
-      openArtwork(id, { countView:false });
+      if(act === "view"){
+        openArtwork(id, { countView:true, focusOffer:false });
+      }else if(act === "like"){
+        if(!requireLogin()) return;
+        openArtwork(id, { countView:false, focusOffer:false });
+        likeCurrent();
+      }else if(act === "offer"){
+        if(!requireLogin()) return;
+        openArtwork(id, { countView:false, focusOffer:true });
+      }
+      return;
+    }
+
+    // offer chips (+%)
+    const chip = e.target.closest("button[data-offerchip]");
+    if(chip && !$("#artModal").hidden){
+      const pct = Number(chip.dataset.offerchip || "0");
+      const id = currentArtworkId;
+      const art = state.artworks.find(a=>a.id===id);
+      if(!art) return;
+
+      const base = art.offers.length ? Math.max(...art.offers) : suggestOffer(art);
+      const next = Math.max(1, Math.floor(base * (1 + pct/100)));
+      $("#offerInput").value = next;
       $("#offerInput").focus();
+      toast(`Suggerito: ${next} ${CURRENCY_SYMBOL}`);
+      return;
     }
   });
 
-  // market tabs
+  // Market tabs
   $$(".chip").forEach(ch=>{
     ch.addEventListener("click", ()=>{
       $$(".chip").forEach(x=>x.classList.remove("is-active"));
@@ -840,7 +856,7 @@ function bindEvents(){
     });
   });
 
-  // modal close
+  // Modal close
   $("#artModal").addEventListener("click", (e)=>{
     if(e.target?.dataset?.close) closeModal();
   });
@@ -848,13 +864,21 @@ function bindEvents(){
     if(e.key === "Escape" && !$("#artModal").hidden) closeModal();
   });
 
-  // modal actions
+  // Modal actions
   $("#btnLike").addEventListener("click", likeCurrent);
   $("#btnFollow").addEventListener("click", followCurrent);
   $("#btnOffer").addEventListener("click", offerCurrent);
   $("#btnShare").addEventListener("click", shareCurrent);
 
-  // login form
+  // BUGFIX OFFERTA: ENTER invia offerta
+  $("#offerInput").addEventListener("keydown", (e)=>{
+    if(e.key === "Enter"){
+      e.preventDefault();
+      offerCurrent();
+    }
+  });
+
+  // Login
   $("#loginForm").addEventListener("submit", (e)=>{
     e.preventDefault();
     const raw = ($("#usernameInput").value || "").trim();
@@ -868,15 +892,11 @@ function bindEvents(){
   $("#btnLogout").addEventListener("click", logout);
 }
 
-/* ---------------------------------------------------------
-   13) ANIMAZIONI WOW: GSAP + SCROLL + PARALLAX
-   --------------------------------------------------------- */
+/* ===== GSAP WOW ===== */
 function initGSAP(){
   if(!window.gsap) return;
-
   gsap.registerPlugin(ScrollTrigger);
 
-  // reveal on load
   gsap.to(".reveal", {
     opacity: 1,
     y: 0,
@@ -886,25 +906,17 @@ function initGSAP(){
     delay: 0.05
   });
 
-  // parallax orbs
   gsap.to(".orb--1", { x: 28, y: 16, duration: 6, repeat:-1, yoyo:true, ease:"sine.inOut" });
   gsap.to(".orb--2", { x: -22, y: 18, duration: 7, repeat:-1, yoyo:true, ease:"sine.inOut" });
   gsap.to(".orb--3", { x: 18, y: -22, duration: 8, repeat:-1, yoyo:true, ease:"sine.inOut" });
 
-  // scroll depth sections
   gsap.utils.toArray(".section").forEach((sec)=>{
     gsap.fromTo(sec, { filter:"brightness(0.92)" }, {
       filter:"brightness(1)",
-      scrollTrigger: {
-        trigger: sec,
-        start:"top 80%",
-        end:"top 20%",
-        scrub: true
-      }
+      scrollTrigger: { trigger: sec, start:"top 80%", end:"top 20%", scrub: true }
     });
   });
 
-  // subtle hero parallax on mouse move
   const showcase = $("#heroShowcase");
   window.addEventListener("mousemove", (e)=>{
     const r = showcase.getBoundingClientRect();
@@ -912,13 +924,15 @@ function initGSAP(){
     const cy = r.top + r.height/2;
     const dx = (e.clientX - cx) / r.width;
     const dy = (e.clientY - cy) / r.height;
-    gsap.to(showcase, { rotateY: dx*6, rotateX: -dy*6, transformPerspective: 800, duration: 0.5, ease:"power2.out" });
+    gsap.to(showcase, {
+      rotateY: dx*6, rotateX: -dy*6,
+      transformPerspective: 800,
+      duration: 0.5, ease:"power2.out"
+    });
   }, { passive:true });
 }
 
-/* ---------------------------------------------------------
-   14) HERO CANVAS (particelle semplici = wow facile)
-   --------------------------------------------------------- */
+/* ===== HERO CANVAS ===== */
 function initHeroCanvas(){
   const canvas = $("#heroCanvas");
   const ctx = canvas.getContext("2d");
@@ -933,7 +947,6 @@ function initHeroCanvas(){
     canvas.height = Math.floor(h * dpr);
     ctx.setTransform(dpr,0,0,dpr,0,0);
 
-    // rigenera particelle
     particles = Array.from({length: 70}, ()=>({
       x: Math.random()*w,
       y: Math.random()*h,
@@ -947,7 +960,6 @@ function initHeroCanvas(){
   function tick(){
     ctx.clearRect(0,0,w,h);
 
-    // gradient "aurora"
     const g = ctx.createLinearGradient(0,0,w,h);
     g.addColorStop(0, "rgba(124,58,237,.14)");
     g.addColorStop(0.5, "rgba(34,211,238,.10)");
@@ -955,7 +967,6 @@ function initHeroCanvas(){
     ctx.fillStyle = g;
     ctx.fillRect(0,0,w,h);
 
-    // particelle + link lines
     for(const p of particles){
       p.x += p.vx; p.y += p.vy;
       if(p.x < -30) p.x = w+30;
@@ -969,7 +980,6 @@ function initHeroCanvas(){
       ctx.fill();
     }
 
-    // lines
     for(let i=0;i<particles.length;i++){
       for(let j=i+1;j<particles.length;j++){
         const a = particles[i], b = particles[j];
@@ -995,17 +1005,9 @@ function initHeroCanvas(){
   tick();
 }
 
-/* ---------------------------------------------------------
-   15) HERO SPARK CANVAS
-   --------------------------------------------------------- */
 function initHeroSpark(){
   const c = $("#heroSpark");
-  const ctx = c.getContext("2d");
-  const w = c.width, h = c.height;
-
   function draw(){
-    ctx.clearRect(0,0,w,h);
-    // dati finti in loop
     const values = [];
     let v = 10;
     for(let i=0;i<22;i++){
@@ -1018,9 +1020,7 @@ function initHeroSpark(){
   setInterval(draw, 2200);
 }
 
-/* ---------------------------------------------------------
-   16) MAIN RENDER
-   --------------------------------------------------------- */
+/* ===== MAIN RENDER ===== */
 function renderAll(){
   renderNavUser();
   renderHeroStats();
@@ -1029,21 +1029,7 @@ function renderAll(){
   renderProfile();
 }
 
-/* ---------------------------------------------------------
-   17) SECURITY: basic escape (demo)
-   --------------------------------------------------------- */
-function escapeHtml(str){
-  return String(str)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-/* ---------------------------------------------------------
-   INIT
-   --------------------------------------------------------- */
+/* ===== INIT ===== */
 bindEvents();
 renderAll();
 initHeroCanvas();
